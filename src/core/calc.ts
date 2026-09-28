@@ -1,6 +1,6 @@
 import { polygonArea } from './geometry';
 import type { Nutzungsgruppe, OutlineShape, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
-import { storeyElevations } from './model';
+import { roomArea, storeyElevations } from './model';
 import { roofStats } from './roof';
 import { meshRoofStats } from './roofMesh';
 import { nutzungInfo, woflFaktor } from './norms';
@@ -103,7 +103,7 @@ export function computeStorey(storey: Storey, project: Project): StoreyResult {
 
   for (const s of storey.shapes) {
     const sign = s.subtract ? -1 : 1;
-    const a = sign * polygonArea(s.points);
+    const a = sign * (s.kind === 'room' ? roomArea(s) : polygonArea(s.points));
     if (s.kind === 'outline') {
       addRS(t.bgf, s.umschliessung, a);
       addRS(t.bri, s.umschliessung, sign * outlineVolume(s, storey, project));

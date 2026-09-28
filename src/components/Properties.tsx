@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { computeProject, computeStorey } from '../core/calc';
 import { fmt2 } from '../core/format';
-import { isSelfIntersecting, perimeter, polygonArea } from '../core/geometry';
+import { isSelfIntersecting, perimeter } from '../core/geometry';
 import type { Nutzungsgruppe, Raumumschliessung, Shape, WoflKategorie } from '../core/model';
+import { shapeArea } from '../core/model';
 import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflFaktor } from '../core/norms';
 import { mapShape, mapStorey, useActiveStorey, useEditor, useSelectedShape } from '../store/store';
 import { BackgroundPanel } from './BackgroundPanel';
@@ -26,7 +27,7 @@ function ShapeProperties({ shape }: { shape: Shape }) {
   const st = useEditor.getState();
   const upd = (fn: (s: Shape) => Shape) => st.update((p) => mapShape(p, storey.id, shape.id, fn));
 
-  const area = polygonArea(shape.points);
+  const area = shapeArea(shape);
   const selfX = isSelfIntersecting(shape.points);
 
   return (
@@ -109,6 +110,16 @@ function ShapeProperties({ shape }: { shape: Shape }) {
                 </option>
               ))}
             </select>
+          </Field>
+          <Field label="Putzabzug [%]" hint="z. B. 3 % bei Flächen aus Rohbaumaßen (wie Archicad-Zonen)">
+            <NumberField
+              value={shape.putzabzug}
+              allowEmpty
+              min={0}
+              max={20}
+              digits={1}
+              onChange={(v) => upd((s) => (s.kind === 'room' ? { ...s, putzabzug: v || undefined } : s))}
+            />
           </Field>
           <h3>Wohnfläche (WoFlV)</h3>
           <Field label="Anrechnung">

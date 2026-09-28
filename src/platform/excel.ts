@@ -184,7 +184,7 @@ export async function exportDefault(project: Project, result: ProjectResult): Pr
       if (i > 0) c.numFmt = NUM;
     });
     ws.addRow([]);
-    ws.addRow(['R = Regelfall, S = Sonderfall der Raumumschließung. KGF = BGF − NRF. BRI = Σ Umrissfläche × Höhe.']).font = { italic: true, color: { argb: 'FF6B7280' } };
+    ws.addRow(['R = Regelfall, S = Sonderfall der Raumumschließung. KGF = BGF − NRF. BRI = Σ Umrissfläche × Höhe bzw. Volumen bis zur Dachhaut.']).font = { italic: true, color: { argb: 'FF6B7280' } };
     ws.views = [{ state: 'frozen', ySplit: h }];
   }
 

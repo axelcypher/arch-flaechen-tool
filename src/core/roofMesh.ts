@@ -113,8 +113,8 @@ export function meshRoofStats(m: DachModell, pts: Point[], floorZ: number, fallb
 /** Höhe der Dachhaut über floorZ an einem Punkt (NaN, wenn kein Dach) */
 export function meshRoofHeightAt(m: DachModell, pts: Point[], floorZ: number, p: Point): number {
   const f = roofHeightField(m, pts);
-  const px = Math.floor((p.x - f.minX) / f.res);
-  const py = Math.floor((p.y - f.minY) / f.res);
-  if (px < 0 || py < 0 || px >= f.w || py >= f.h) return NaN;
+  // Punkte auf dem Rand (z. B. Außenkanten) der nächstgelegenen Zelle zuordnen
+  const px = Math.min(f.w - 1, Math.max(0, Math.floor((p.x - f.minX) / f.res)));
+  const py = Math.min(f.h - 1, Math.max(0, Math.floor((p.y - f.minY) / f.res)));
   return f.z[py * f.w + px] - floorZ;
 }

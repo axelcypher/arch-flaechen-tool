@@ -83,6 +83,7 @@ function normalizeShape(s: Record<string, unknown>): Shape | null {
       ...common,
       kind: 'room',
       nummer: str(s.nummer, ''),
+      putzabzug: typeof s.putzabzug === 'number' && s.putzabzug > 0 && s.putzabzug < 100 ? s.putzabzug : undefined,
       nutzung: oneOf<Nutzungsgruppe>(s.nutzung, NUTZUNGSGRUPPEN.map((n) => n.id), 'NUF1'),
       wofl: {
         kategorie: oneOf<WoflKategorie>(w.kategorie, WOFL_KATEGORIEN.map((k) => k.id), 'keine'),

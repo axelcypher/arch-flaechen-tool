@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { computeProject } from '../core/calc';
 import { projectToCsv } from '../core/export';
 import { parseProject, ProjectFormatError, serializeProject } from '../core/serialize';
 import { isTauri, openTextFile, saveTextFile } from '../platform/files';
 import type { Tool } from '../store/store';
 import { useEditor } from '../store/store';
+import { IfcImportDialog } from './IfcImportDialog';
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Auswählen', key: 'V', icon: '⬉' },
@@ -27,6 +29,8 @@ export function Toolbar() {
   const st = useEditor.getState();
 
   const confirmDiscard = () => !useEditor.getState().dirty || window.confirm('Ungespeicherte Änderungen verwerfen?');
+
+  const [ifcOpen, setIfcOpen] = useState(false);
 
   const onNew = () => {
     if (confirmDiscard()) st.newProject();
@@ -86,7 +90,11 @@ export function Toolbar() {
         <button onClick={onSave} title={isTauri() ? 'Projekt speichern' : 'Projekt als Datei herunterladen'}>
           Speichern{dirty ? ' •' : ''}
         </button>
+        <button onClick={() => setIfcOpen(true)} title="Gebäudemodell aus Archicad, Revit & Co. importieren">
+          IFC-Import
+        </button>
       </div>
+      {ifcOpen && <IfcImportDialog onClose={() => setIfcOpen(false)} />}
       <div className="tb-group">
         <button onClick={st.undo} disabled={!canUndo} title="Rückgängig (Strg+Z)">
           ↶

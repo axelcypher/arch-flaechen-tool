@@ -16,7 +16,7 @@ import {
 import { fmt2, parseNum } from '../core/format';
 import { NumberField } from './fields';
 import type { Shape, Storey } from '../core/model';
-import { createOutline, createRoom } from '../core/model';
+import { createOutline, createRoom, shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import { bgWorldBounds, scaleAround, vectorSegmentGrid } from '../core/background';
 import { detectRegion } from '../core/detect';
@@ -703,7 +703,7 @@ export function Canvas() {
     const wPx = (b.maxX - b.minX) * vp.scale;
     const hPx = (b.maxY - b.minY) * vp.scale;
     if (wPx < 30 || hPx < 16) return null;
-    const area = polygonArea(s.points) * (s.subtract ? -1 : 1);
+    const area = shapeArea(s) * (s.subtract ? -1 : 1);
     const title = s.kind === 'room' ? [s.nummer, s.name].filter(Boolean).join(' ') : `${s.name} (${s.umschliessung})`;
     const showTitle = wPx > 70 && hPx > 34 && title;
     return (

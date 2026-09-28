@@ -299,17 +299,15 @@ function heightFieldFaces(pts: Point[], height: (p: Point) => number) {
     }
     return c;
   };
+  // Höhen an den Rasterecken → durchgehende Fläche (Kanten nur an echten Knicken wie dem First)
+  const H: number[] = [];
+  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) H.push(height({ x: x0 + i * dx, y: y0 + j * dy }));
+  const corner = (i: number, j: number): Point3 => ({ x: x0 + i * dx, y: y0 + j * dy, z: H[j * (n + 1) + i] });
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
-      const c = { x: x0 + (i + 0.5) * dx, y: y0 + (j + 0.5) * dy };
-      if (!inside(c)) continue;
-      const z = height(c);
-      tops.push([
-        { x: c.x - dx / 2, y: c.y - dy / 2, z },
-        { x: c.x + dx / 2, y: c.y - dy / 2, z },
-        { x: c.x + dx / 2, y: c.y + dy / 2, z },
-        { x: c.x - dx / 2, y: c.y + dy / 2, z },
-      ]);
+      if (!inside({ x: x0 + (i + 0.5) * dx, y: y0 + (j + 0.5) * dy })) continue;
+      tops.push([corner(i, j), corner(i + 1, j), corner(i + 1, j + 1)]);
+      tops.push([corner(i, j), corner(i + 1, j + 1), corner(i, j + 1)]);
     }
   }
   const sides: Point3[][] = [];

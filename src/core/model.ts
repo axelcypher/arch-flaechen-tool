@@ -58,6 +58,8 @@ export interface RoomShape extends ShapeBase {
   nummer: string;
   nutzung: Nutzungsgruppe;
   wofl: WoflAngaben;
+  /** Abzug in % von der Polygonfläche, z. B. 3 % Putzabzug bei Ermittlung aus Rohbaumaßen */
+  putzabzug?: number;
 }
 
 export type Shape = OutlineShape | RoomShape;
@@ -206,4 +208,24 @@ export function storeyElevations(p: Project): number[] {
     z = e + s.hoehe;
   }
   return out;
+}
+
+/** Anrechenbare Grundfläche eines Raums (Polygonfläche abzüglich Putzabzug) */
+export function roomArea(r: RoomShape): number {
+  return polygonAreaAbs(r.points) * (1 - (r.putzabzug ?? 0) / 100);
+}
+
+function polygonAreaAbs(pts: Point[]): number {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(s) / 2;
+}
+
+/** Fläche einer Form wie in der Auswertung (Räume inkl. Putzabzug), ohne Vorzeichen */
+export function shapeArea(s: Shape): number {
+  return s.kind === 'room' ? roomArea(s) : polygonAreaAbs(s.points);
 }
