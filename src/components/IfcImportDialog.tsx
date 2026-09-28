@@ -7,6 +7,7 @@ import { buildFromIfc } from '../core/ifcImport';
 import { createProject } from '../core/model';
 import { pickFile } from '../platform/files';
 import { useEditor } from '../store/store';
+import { NumberField } from './fields';
 
 type Step = { kind: 'start' } | { kind: 'loading'; msg: string } | { kind: 'options'; x: IfcExtract; file: string } | { kind: 'done'; report: string[] };
 
@@ -14,7 +15,14 @@ type Step = { kind: 'start' } | { kind: 'loading'; msg: string } | { kind: 'opti
 export function IfcImportDialog({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<Step>({ kind: 'start' });
   const [error, setError] = useState<string | null>(null);
-  const [opts, setOpts] = useState<IfcImportOptions & { replace: boolean }>({ rooms: true, outlines: true, roof: true, wohnflaeche: false, replace: true });
+  const [opts, setOpts] = useState<IfcImportOptions & { replace: boolean }>({
+    rooms: true,
+    outlines: true,
+    roof: true,
+    wohnflaeche: false,
+    planSchnitthoehe: 1,
+    replace: true,
+  });
 
   const choose = async () => {
     setError(null);
@@ -119,6 +127,23 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
               <input type="checkbox" checked={opts.roof} onChange={(e) => setOpts({ ...opts, roof: e.target.checked })} />
               Dach aus dem Modell für den BRI (Volumen bis zur Dachhaut)
             </label>
+            <label className="toggle block">
+              <input
+                type="checkbox"
+                checked={!!opts.planSchnitthoehe}
+                onChange={(e) => setOpts({ ...opts, planSchnitthoehe: e.target.checked ? 1 : 0 })}
+              />
+              Geschossschnitt als Plan hinterlegen (zum Prüfen und Korrigieren im Grundriss)
+            </label>
+            {!!opts.planSchnitthoehe && (
+              <label className="toggle block indent">
+                Schnitthöhe über Fußboden
+                <span className="inline-num">
+                  <NumberField value={opts.planSchnitthoehe} min={0.1} max={5} onChange={(v) => v && setOpts({ ...opts, planSchnitthoehe: v })} />
+                </span>
+                m
+              </label>
+            )}
             <hr />
             <label className="toggle block">
               <input type="radio" checked={opts.replace} onChange={() => setOpts({ ...opts, replace: true })} />

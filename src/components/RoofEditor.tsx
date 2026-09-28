@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
+import { modellRoofParams } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { rectPoints } from '../core/geometry';
 import type { OutlineShape, Project, Storey } from '../core/model';
-import { storeyElevations } from '../core/model';
 import type { Dach, DachTyp, Point3 } from '../core/roof';
 import { DACH_TYPEN, defaultDach, roofStats, solidFaces } from '../core/roof';
 import { meshRoofStats } from '../core/roofMesh';
@@ -26,8 +26,8 @@ export function RoofEditor({
     if (!d) return null;
     if (d.typ === 'modell') {
       if (!project.dachModell) return null;
-      const floorZ = storeyElevations(project)[project.storeys.indexOf(storey)] ?? 0;
-      const m = meshRoofStats(project.dachModell, shape.points, floorZ, h, d.maxHoehe);
+      const r = modellRoofParams(project, storey, shape);
+      const m = meshRoofStats(project.dachModell, shape.points, r.floorZ, h, r.cap);
       return { volumen: m.volumen, firsthoehe: m.firsthoehe, info: `Dachhaut über ${Math.round(m.abdeckung * 100)} % der Fläche` };
     }
     const s = roofStats(d, shape.points);
@@ -140,7 +140,10 @@ export function RoofEditor({
         </>
       )}
       {d?.typ === 'modell' && (
-        <Field label="Höhe begrenzen auf [m]" hint="leer = bis zur Dachhaut; bei Geschossen unter dem obersten die Geschosshöhe">
+        <Field
+          label="Höhe begrenzen auf [m]"
+          hint="leer = automatisch: bis zum nächsten Geschoss, soweit dieses dort BGF hat – sonst bis zur Dachhaut (z. B. Dachspitze als eigenes Geschoss)"
+        >
           <NumberField value={d.maxHoehe} allowEmpty min={0} onChange={(v) => onChange({ ...d, maxHoehe: v })} />
         </Field>
       )}

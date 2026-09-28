@@ -106,7 +106,7 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
       {bg && (
         <>
           <p className="small-text">
-            <strong>{bg.type === 'vector' ? 'DXF' : bg.pdf ? 'PDF' : 'Bild'}:</strong> {bg.name}
+            <strong>{bg.type === 'vector' ? (bg.source === 'ifc' ? 'IFC' : 'DXF') : bg.pdf ? 'PDF' : 'Bild'}:</strong> {bg.name}
             {bg.type === 'raster' && (
               <span className="muted">
                 {' '}
@@ -130,7 +130,7 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
               <NumberField value={bg.metersPerPixel * 1000} digits={3} min={0.0001} onChange={(v) => v && patchBg({ metersPerPixel: v / 1000 })} />
             </Field>
           )}
-          {bg.type === 'vector' && (
+          {bg.type === 'vector' && bg.source !== 'ifc' && (
             <Field label="Einheit der DXF-Zeichnung">
               <select
                 value={DXF_UNITS.some((u) => Math.abs(u.scale - bg.scale) < 1e-12) ? bg.scale : 'custom'}

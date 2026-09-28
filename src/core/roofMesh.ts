@@ -83,7 +83,12 @@ export interface MeshRoofStats {
  * Ohne Dach über einem Punkt gilt fallbackHoehe; die Höhe wird auf maxHoehe begrenzt
  * (für Geschosse unterhalb des obersten).
  */
-export function meshRoofStats(m: DachModell, pts: Point[], floorZ: number, fallbackHoehe: number, maxHoehe = Infinity): MeshRoofStats {
+/**
+ * cap: größte Höhe über Fußboden – fester Wert oder je Punkt (z. B. Geschosshöhe nur dort,
+ * wo das Geschoss darüber BGF hat; sonst bis zur Dachhaut).
+ */
+export function meshRoofStats(m: DachModell, pts: Point[], floorZ: number, fallbackHoehe: number, cap: number | ((p: Point) => number) = Infinity): MeshRoofStats {
+  const capAt = typeof cap === 'function' ? cap : () => cap;
   const f = roofHeightField(m, pts);
   let sum = 0;
   let n = 0;
@@ -95,9 +100,9 @@ export function meshRoofStats(m: DachModell, pts: Point[], floorZ: number, fallb
       if (!pointInPolygon(p, pts)) continue;
       const zz = f.z[py * f.w + px];
       let hh: number;
-      if (Number.isNaN(zz)) hh = fallbackHoehe;
+      if (Number.isNaN(zz)) hh = Math.min(fallbackHoehe, capAt(p));
       else {
-        hh = Math.min(Math.max(zz - floorZ, 0), maxHoehe);
+        hh = Math.min(Math.max(zz - floorZ, 0), capAt(p));
         covered++;
       }
       sum += hh;

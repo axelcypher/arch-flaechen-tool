@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { computeProject } from '../core/calc';
+import { computeProject, modellRoofParams } from '../core/calc';
 import { fmt2 } from '../core/format';
 import type { Point } from '../core/geometry';
 import type { OutlineShape, Project } from '../core/model';
@@ -270,9 +270,12 @@ export default function View3D() {
 function outlineFaces(s: OutlineShape, project: Project, floorZ: number, storeyH: number) {
   const h = s.hoehe ?? storeyH;
   if (s.dach?.typ === 'modell' && project.dachModell) {
+    const storey = project.storeys.find((st) => st.shapes.includes(s));
+    const cap = storey ? modellRoofParams(project, storey, s).cap : Infinity;
+    const capAt = typeof cap === 'function' ? cap : () => cap;
     return heightFieldFaces(s.points, (p) => {
       const v = meshRoofHeightAt(project.dachModell!, s.points, floorZ, p);
-      return Number.isNaN(v) ? h : Math.min(Math.max(v, 0), s.dach?.maxHoehe ?? Infinity);
+      return Math.min(Number.isNaN(v) ? h : Math.max(v, 0), capAt(p));
     });
   }
   return solidFaces(s.points, s.dach, h);

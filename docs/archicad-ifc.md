@@ -12,6 +12,27 @@ Graphisoft und lassen sich außerhalb von Archicad nicht lesen. Der verlässlich
 | Zonenkörper unter Dachschrägen | 3D-Geometrie der Zone | WoFlV-Faktor aus lichten Höhen (≥ 2 m / 1–2 m / < 1 m), exakt aus den Deckenflächen |
 | Wände, Stützen, Fenster, Türen, Vorhangfassaden | Bauteilgeometrie | BGF-Außenumriss je Geschoss, exakt auf die Bauteilkanten eingepasst |
 | Dach, Dachdecken | `IfcRoof`, `IfcSlab` (ROOF) | Dachhaut für den BRI („Dach aus Modell“) |
+| gesamtes Modell | Bauteilgeometrie | Geschossschnitt (Standard 1,00 m über Fußboden) als hinterlegter Vektorplan je Geschoss |
+
+## BGF und BRI bei Dachgeschossen
+
+Die **BGF** wird je Grundrissebene (Geschoss) auf Fußbodenhöhe ermittelt. Ein Geschoss ohne Wände
+und Zonen – typischerweise der **Spitzboden bzw. die Dachspitze**, die in Archicad oft als eigenes
+Geschoss oberhalb der lichten Höhe des DG angelegt ist – erhält keinen BGF-Umriss.
+
+Der **BRI** umfasst dagegen die ganze Gebäudehülle bis zur Dachhaut. Beim „Dach aus Modell“ reicht
+der Körper eines Umrisses deshalb nur dort bis zum Fußboden des nächsten Geschosses, wo dieses
+Geschoss BGF hat (Umriss abzüglich Abzugsflächen). Überall sonst – über einem Luftraum, unter der
+Dachspitze eines Spitzbodens ohne BGF oder neben einem kleineren Obergeschoss – geht er bis zur
+Dachhaut. So wird die Dachspitze dem DG zugerechnet, ohne doppelt zu zählen. Eine feste Begrenzung
+lässt sich je Umriss unter „Höhe begrenzen auf“ eintragen.
+
+## Plan zum Prüfen und Korrigieren
+
+Der Geschossschnitt wird als Vektorplan hinterlegt (Layer Wände, Stützen/Träger, Fenster, Türen,
+Treppen/Geländer, Decken/Dach, Möblierung, Sonstiges). Umrisse und Räume lassen sich darauf mit
+Punkt- und Kantenfang korrigieren oder mit „Erkennen“ neu erzeugen. Schnitthöhe im Importdialog
+einstellbar; Layer in den Geschoss-Eigenschaften ein- und ausblenden.
 
 ## Empfohlene Exporteinstellungen
 
