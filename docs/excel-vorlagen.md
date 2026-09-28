@@ -10,7 +10,7 @@ Wohnflächen, BGF, BRI (Rechenweg), Räume und einer Platzhalter-Übersicht.
 
 | Schreibweise | Wirkung |
 |---|---|
-| `{{projekt.name}}`, `{{datum}}`, `{{summe.bgf}}` | Einzelwert |
+| `{{projekt.name}}`, `{{projekt.code}}`, `{{datum}}`, `{{summe.bgf}}` | Einzelwert |
 | `{{geschoss:EG.bri}}`, `{{wohnung:WE 01.wofl}}` | Wert eines bestimmten Geschosses / einer Wohnung |
 | `{{raum.name}}` in einer Zeile | **Zeile** wird je Raum wiederholt (ebenso `geschoss`, `wohnung`, `nutzung`, `bri`) |
 | `{{#geschoss}}` … `{{/geschoss}}` | **Zeilenblock** wird je Geschoss wiederholt; Blöcke lassen sich verschachteln |
@@ -126,6 +126,15 @@ Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI“ der Muste
 
 Mehrere Filter mit Komma: `{{raum[wofl,!abzug].name}}`. Filter gelten auch für Blöcke: `{{#geschoss[name!=Spitzboden]}}`.
 
+Ein Filter gilt für die **ganze Zeile**: Steht in einer Zeile `{{raum.nummer}}`, `{{raum.name}}` und
+`{{raum[wofl].wofl}}`, werden nur Wohnflächen-Räume ausgegeben. Stehen mehrere verschiedene Filter in
+einer Zeile, müssen alle zutreffen.
+
+Ob ein Raum zur Wohnfläche zählt, legt die WoFlV-Kategorie im Raum fest („keine Wohnfläche“ = nicht
+angerechnet). Beim IFC-Import mit „als Wohnfläche anrechnen“ werden Keller-, Technik-, Treppen-,
+Garagen- und Dachbodenräume sowie Räume in Keller-/Untergeschossen automatisch ausgenommen; in den
+Geschosseigenschaften lässt sich das je Geschoss neu zuordnen („automatisch nach Raumname“ / „keine“).
+
 ## Verfügbare Werte
 
 Die vollständige Liste steht im Excel-Dialog unter **Platzhalter anzeigen** und im Blatt „Platzhalter“
@@ -134,6 +143,7 @@ der Muster-Vorlage.
 ## Einschränkungen
 
 - Nur `.xlsx` (kein `.xls`/`.xlsm`)
-- Der Bereich oberhalb der ersten Wiederholung (Kopf, Logo) bleibt unverändert; Bilder, bedingte
-  Formatierungen und Datenüberprüfungen im wiederholten Bereich werden nicht vervielfältigt
+- Der Bereich oberhalb der ersten Wiederholung (Kopf, Logo) bleibt unverändert. Bilder und Logos der
+  Vorlage – auch in Kopf-/Fußzeile und als Blatthintergrund – werden unverändert übernommen, aber im
+  wiederholten Bereich nicht vervielfältigt (ebenso bedingte Formatierungen und Datenüberprüfungen)
 - Verbundene Zellen werden je Zeile übernommen, mehrzeilige Verbünde im wiederholten Bereich nicht

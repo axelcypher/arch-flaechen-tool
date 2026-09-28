@@ -185,15 +185,21 @@ interface OutMeta {
 }
 
 function rowRepeat(row: TemplateRow, bound: Bindings): { coll: Collection; filter?: string } | null {
+  let coll: Collection | undefined;
+  const filters = new Set<string>();
   for (const v of row.cells.values()) {
     const t = cellText(v);
     if (!t) continue;
     for (const m of t.matchAll(PH())) {
       const k = parseKey(m[1]);
-      if (k.coll && !bound[k.coll]) return { coll: k.coll, filter: k.filter };
+      if (!k.coll || bound[k.coll]) continue;
+      coll ??= k.coll;
+      // alle Filter der Sammlung in dieser Zeile gelten gemeinsam (z. B. {{raum.nummer}} … {{raum[wofl].name}})
+      if (k.coll === coll && k.filter) filters.add(k.filter);
     }
   }
-  return null;
+  if (!coll) return null;
+  return { coll, filter: filters.size ? [...filters].join(',') : undefined };
 }
 
 function itemsFor(coll: Collection, filter: string | undefined, bound: Bindings, ctx: ExportContext): Row[] {

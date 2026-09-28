@@ -146,6 +146,8 @@ export interface ProjectSettings {
 }
 
 export interface ProjectMeta {
+  /** Projektcode / Projektnummer */
+  projektcode: string;
   adresse: string;
   bearbeiter: string;
 }
@@ -176,7 +178,7 @@ export function createProject(name = 'Neues Projekt'): Project {
     format: 'arch-flaechen-tool',
     version: 1,
     name,
-    meta: { adresse: '', bearbeiter: '' },
+    meta: { projektcode: '', adresse: '', bearbeiter: '' },
     settings: { gridStep: 0.05, freisitzFaktor: 0.25 },
     storeys: [createStorey('EG', 3)],
   };

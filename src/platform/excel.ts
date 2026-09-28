@@ -6,6 +6,7 @@ import type { CellValue, TemplateRow } from '../core/template';
 import { expandTemplate } from '../core/template';
 import type { EvalValue } from '../core/formulaEval';
 import { evaluateSheet } from '../core/formulaEval';
+import { restoreTemplateGraphics } from './xlsxGraphics';
 import type { Project } from '../core/model';
 import { NUF_IDS, nutzungInfo } from '../core/norms';
 
@@ -37,7 +38,8 @@ export async function exportWithTemplate(template: Uint8Array, project: Project,
   wb.eachSheet((ws) => writeFormulaResults(ws));
   // Excel soll alle Formeln beim Öffnen neu berechnen
   wb.calcProperties = { ...(wb.calcProperties ?? {}), fullCalcOnLoad: true };
-  return new Uint8Array(await wb.xlsx.writeBuffer());
+  // Logos/Bilder der Vorlage (auch in Kopf-/Fußzeile) unverändert übernehmen
+  return restoreTemplateGraphics(template, new Uint8Array(await wb.xlsx.writeBuffer()));
 }
 
 function formulaOf(cell: Cell): string | null {
@@ -190,7 +192,7 @@ function styleSum(ws: Worksheet, rowNo: number) {
 function title(ws: Worksheet, text: string, project: Project) {
   ws.getCell('A1').value = text;
   ws.getCell('A1').font = { bold: true, size: 14 };
-  ws.getCell('A2').value = [project.name, project.meta.adresse].filter(Boolean).join(' · ');
+  ws.getCell('A2').value = [project.meta.projektcode, project.name, project.meta.adresse].filter(Boolean).join(' · ');
   ws.getCell('A3').value = `Stand: ${new Date().toLocaleDateString('de-DE')}${project.meta.bearbeiter ? ` · Bearbeiter: ${project.meta.bearbeiter}` : ''}`;
   ws.getCell('A2').font = { color: { argb: 'FF6B7280' } };
   ws.getCell('A3').font = { color: { argb: 'FF6B7280' } };
@@ -348,6 +350,8 @@ function sampleHeader(ws: Worksheet, titel: string, lastCol = 'D') {
   ws.getCell('A1').font = { size: 11, color: { argb: 'FF6B7280' } };
   ws.getCell('A3').value = '{{projekt.name}}';
   ws.getCell('A3').font = { bold: true, size: 12 };
+  ws.getCell(`${lastCol}3`).value = 'Projekt {{projekt.code}}';
+  ws.getCell(`${lastCol}3`).alignment = { horizontal: 'right' };
   ws.getCell('A4').value = '{{projekt.adresse}}';
   ws.getCell('A6').value = 'Stand {{datum}}';
   ws.getCell('A6').font = { size: 9 };

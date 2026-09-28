@@ -55,6 +55,7 @@ export function Report() {
           <h1>Flächenaufstellung</h1>
           <div className="report-meta">
             <div>
+              {project.meta.projektcode && <>{project.meta.projektcode} · </>}
               <strong>{project.name}</strong>
             </div>
             {project.meta.adresse && <div>{project.meta.adresse}</div>}

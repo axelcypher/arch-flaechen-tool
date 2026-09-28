@@ -36,6 +36,20 @@ describe('Vorlagen-Engine', () => {
   const p = project();
   const ctx = buildExportContext(p, computeProject(p), new Date(2026, 8, 28));
 
+  it('Filter an einem Platzhalter gilt für die ganze Zeile', () => {
+    const tpl = rowsOf([['{{raum.nummer}}', '{{raum.name}}', '{{raum[wofl].wofl}}']]);
+    const names = expandTemplate(tpl, ctx).map((r) => r.cells.get(2));
+    expect(names).toEqual(['Flur', 'Küche', 'Bad']);
+  });
+
+  it('Projektcode als Platzhalter', () => {
+    const q = project();
+    q.meta.projektcode = '2417';
+    const c = buildExportContext(q, computeProject(q));
+    const out = expandTemplate(rowsOf([['{{projekt.code}} – {{projekt.name}}', '{{projekt.projektcode}}']]), c);
+    expect(out[0].cells.get(1)).toBe('2417 – EFH Sander');
+  });
+
   it('Geschossblöcke mit Räumen, Zwischensummen, Filtern und Gesamtsummen', () => {
     const tpl = rowsOf([
       ['Wohnflächen (Hauptnutzfläche)', '', 'WoFl', 'WoFl Summe'], // 1

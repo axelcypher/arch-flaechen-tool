@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { computeProject, modellRoofParams } from '../core/calc';
+import { computeProject } from '../core/calc';
 import { fmt2 } from '../core/format';
-import type { Point } from '../core/geometry';
 import type { OutlineShape, Project } from '../core/model';
 import { storeyElevations } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import type { Point3 } from '../core/roof';
 import { solidFaces } from '../core/roof';
-import { meshRoofHeightAt } from '../core/roofMesh';
+import { modellSolidFaces } from '../core/modellSolid';
 import { useEditor } from '../store/store';
 
 /**
@@ -271,62 +270,9 @@ function outlineFaces(s: OutlineShape, project: Project, floorZ: number, storeyH
   const h = s.hoehe ?? storeyH;
   if (s.dach?.typ === 'modell' && project.dachModell) {
     const storey = project.storeys.find((st) => st.shapes.includes(s));
-    const cap = storey ? modellRoofParams(project, storey, s).cap : Infinity;
-    const capAt = typeof cap === 'function' ? cap : () => cap;
-    return heightFieldFaces(s.points, (p) => {
-      const v = meshRoofHeightAt(project.dachModell!, s.points, floorZ, p);
-      return Math.min(Number.isNaN(v) ? h : Math.max(v, 0), capAt(p));
-    });
+    return modellSolidFaces(project, storey, s, floorZ);
   }
   return solidFaces(s.points, s.dach, h);
-}
-
-/** Näherung für Modell-Dächer: Grundriss in Streifen zerlegen, Oberseite als Raster */
-function heightFieldFaces(pts: Point[], height: (p: Point) => number) {
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  const x0 = Math.min(...xs);
-  const y0 = Math.min(...ys);
-  const x1 = Math.max(...xs);
-  const y1 = Math.max(...ys);
-  const n = 60;
-  const dx = (x1 - x0) / n;
-  const dy = (y1 - y0) / n;
-  const tops: Point3[][] = [];
-  const inside = (p: Point) => {
-    let c = false;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      const a = pts[i];
-      const b = pts[j];
-      if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) c = !c;
-    }
-    return c;
-  };
-  // Höhen an den Rasterecken → durchgehende Fläche (Kanten nur an echten Knicken wie dem First)
-  const H: number[] = [];
-  for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) H.push(height({ x: x0 + i * dx, y: y0 + j * dy }));
-  const corner = (i: number, j: number): Point3 => ({ x: x0 + i * dx, y: y0 + j * dy, z: H[j * (n + 1) + i] });
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (!inside({ x: x0 + (i + 0.5) * dx, y: y0 + (j + 0.5) * dy })) continue;
-      tops.push([corner(i, j), corner(i + 1, j), corner(i + 1, j + 1)]);
-      tops.push([corner(i, j), corner(i + 1, j + 1), corner(i, j + 1)]);
-    }
-  }
-  const sides: Point3[][] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[i];
-    const b = pts[(i + 1) % pts.length];
-    const steps = 24;
-    const top: Point3[] = [];
-    for (let k = 0; k <= steps; k++) {
-      const p = { x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps };
-      // Punkt minimal nach innen versetzen, um die Dachhöhe am Rand zu treffen
-      top.push({ ...p, z: height(p) });
-    }
-    sides.push([{ x: a.x, y: a.y, z: 0 }, ...top, { x: b.x, y: b.y, z: 0 }]);
-  }
-  return { tops, sides, bottom: pts.map((p) => ({ x: p.x, y: p.y, z: 0 })) };
 }
 
 function facesToGeometry(f: { tops: Point3[][]; sides: Point3[][]; bottom: Point3[] }, z0: number): THREE.BufferGeometry {

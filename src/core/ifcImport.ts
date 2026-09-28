@@ -8,6 +8,7 @@ import { createOutline, createProject, createRoom, createStorey } from './model'
 import { modellRoofParams } from './calc';
 import type { DachModell } from './roofMesh';
 import { meshRoofStats } from './roofMesh';
+import { woflArt } from './norms';
 import { SegmentGrid } from './spatial';
 
 /**
@@ -94,6 +95,7 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
   if (o.rooms) {
     let n = 0;
     let putz = 0;
+    let keineWofl = 0;
     for (const sp of x.spaces) {
       const pts = footprintFromTriangles(sp.tris);
       if (!pts) {
@@ -117,16 +119,21 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
       const hc = heightClasses(sp.tris);
       if (hc && hc.a2 < 0.995) notes.push(`lichte Höhe ≥ 2 m: ${fmt(hc.a2 * 100, 0)} %, 1–2 m: ${fmt(hc.a12 * 100, 0)} %, < 1 m: ${fmt(hc.a01 * 100, 0)} %`);
       if (o.wohnflaeche) {
-        room.wofl =
-          hc && hc.a2 < 0.995
-            ? { kategorie: 'individuell', faktor: round(hc.a2 + 0.5 * hc.a12, 4), wohnung: st.name }
-            : { kategorie: 'voll', wohnung: st.name };
+        const art = woflArt(room.name, st.name, room.nutzung);
+        if (art === 'freisitz') room.wofl = { kategorie: 'freisitz', wohnung: st.name };
+        else if (art === 'wohnen')
+          room.wofl =
+            hc && hc.a2 < 0.995
+              ? { kategorie: 'individuell', faktor: round(hc.a2 + 0.5 * hc.a12, 4), wohnung: st.name }
+              : { kategorie: 'voll', wohnung: st.name };
+        else keineWofl++;
       }
       if (notes.length) room.bemerkung = notes.join('; ');
       st.shapes.push(room);
       n++;
     }
     report.push(`${n} Räume aus IFC-Zonen übernommen.`);
+    if (o.wohnflaeche && keineWofl) report.push(`${keineWofl} Räume nicht als Wohnfläche angerechnet (Keller, Technik, Treppenhaus, Garage, Dachboden …) – bei Bedarf im Raum ändern.`);
     if (putz) report.push(`${putz} Räume mit Putzabzug aus Archicad (Nettofläche aus Rohbaumaßen) übernommen.`);
   }
 

@@ -58,6 +58,8 @@ function totalsRow(t: AreaTotals): Row {
 export function buildExportContext(project: Project, result: ProjectResult, date = new Date()): ExportContext {
   const scalars: Record<string, Value> = {
     'projekt.name': project.name,
+    'projekt.code': project.meta.projektcode,
+    'projekt.projektcode': project.meta.projektcode,
     'projekt.adresse': project.meta.adresse,
     'projekt.bearbeiter': project.meta.bearbeiter,
     datum: date.toLocaleDateString('de-DE'),
@@ -170,6 +172,7 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
     group: 'projekt / datum',
     keys: [
       ['projekt.name', 'Projektbezeichnung'],
+      ['projekt.code', 'Projektcode (auch projekt.projektcode)'],
       ['projekt.adresse', 'Adresse'],
       ['projekt.bearbeiter', 'Bearbeiter'],
       ['datum', 'Datum des Exports'],
@@ -255,7 +258,9 @@ const NUF_HNF = new Set(['NUF 1', 'NUF 2', 'NUF 3', 'NUF 4', 'NUF 5', 'NUF 6']);
 const NAMED_FILTERS: Record<string, (r: Row) => boolean> = {
   wofl: (r) => r.wohnflaeche === 'ja',
   wohnflaeche: (r) => r.wohnflaeche === 'ja',
+  'wohnfläche': (r) => r.wohnflaeche === 'ja',
   nebenflaeche: (r) => r.wohnflaeche !== 'ja',
+  'nebenfläche': (r) => r.wohnflaeche !== 'ja',
   nuf: (r) => String(r.nutzung).startsWith('NUF'),
   tf: (r) => String(r.nutzung).startsWith('TF'),
   vf: (r) => String(r.nutzung).startsWith('VF'),

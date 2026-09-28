@@ -24,6 +24,9 @@ export function Sidebar() {
         <Field label="Bezeichnung">
           <TextField value={project.name} onChange={(v) => st.update((p) => ({ ...p, name: v }))} />
         </Field>
+        <Field label="Projektcode">
+          <TextField value={project.meta.projektcode} onChange={(v) => st.update((p) => ({ ...p, meta: { ...p.meta, projektcode: v } }))} />
+        </Field>
         <Field label="Adresse">
           <TextField value={project.meta.adresse} onChange={(v) => st.update((p) => ({ ...p, meta: { ...p.meta, adresse: v } }))} />
         </Field>

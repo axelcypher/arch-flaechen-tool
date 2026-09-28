@@ -58,3 +58,18 @@ export function woflFaktor(w: WoflAngaben, settings: ProjectSettings): number {
 function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
 }
+
+/**
+ * Zählt ein Raum nach WoFlV zur Wohnfläche? Nicht dazu gehören (§ 2 Abs. 3) Zubehörräume wie Keller,
+ * Abstellräume außerhalb der Wohnung, Waschküchen, Trockenräume, Heizungsräume, Garagen, Dachböden,
+ * außerdem Treppen mit mehr als drei Steigungen und Räume, die Technik aufnehmen.
+ */
+const KEINE_WOFL = /keller|heiz|technik|hausanschluss|elektro|lüftung|server|garage|carport|stellplatz|waschküche|waschkueche|trockenraum|trockenboden|dachboden|spitzboden|\bboden\b|lager|fahrrad|müll|muell|tank|treppe|\btr\b|\bth\b|aufzug|schacht/i;
+const FREISITZ = /balkon|loggia|terrasse|dachgarten|freisitz/i;
+const KEINE_WOFL_GESCHOSS = /keller|\bkg\b|\bug\b|untergeschoss|spitzboden|dachboden|^dach$/i;
+
+export function woflArt(raum: string, geschoss: string, nutzung: Nutzungsgruppe): 'wohnen' | 'freisitz' | 'keine' {
+  if (FREISITZ.test(raum)) return 'freisitz';
+  if (KEINE_WOFL.test(raum) || KEINE_WOFL_GESCHOSS.test(geschoss.trim()) || nutzung === 'TF') return 'keine';
+  return 'wohnen';
+}
