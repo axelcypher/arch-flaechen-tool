@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { AreaTotals } from '../core/calc';
 import { computeProject } from '../core/calc';
+import { briRechenweg } from '../core/rechenweg';
 import { fmt2 } from '../core/format';
 import { NUF_IDS, nutzungInfo, WOFL_KATEGORIEN } from '../core/norms';
 import { useEditor } from '../store/store';
@@ -11,6 +12,7 @@ export function Report() {
   const project = useEditor((s) => s.project);
   const setOpen = useEditor((s) => s.setReportOpen);
   const r = useMemo(() => computeProject(project), [project]);
+  const rechenweg = useMemo(() => briRechenweg(project), [project]);
   const today = new Date().toLocaleDateString('de-DE');
   const [showPlans, setShowPlans] = useState(true);
   const [showBackground, setShowBackground] = useState(false);
@@ -86,6 +88,49 @@ export function Report() {
         </table>
         <p className="report-note">
           R = Regelfall der Raumumschließung, S = Sonderfall. KGF = BGF − NRF (rechnerisch). BRI = Σ Umrissfläche × Geschosshöhe bzw. Volumen bis zur Dachhaut (Dachform oder Dach aus IFC-Modell).
+        </p>
+
+        <h2>Brutto-Rauminhalt – Rechenweg</h2>
+        <table className="report-table">
+          <thead>
+            <tr>
+              <th>Geschoss</th>
+              <th>Umriss</th>
+              <th>Teilkörper</th>
+              <th>Rechenweg [m]</th>
+              <th>Volumen [m³]</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.storeys.map((sr) => {
+              const steps = rechenweg.filter((b) => b.geschossId === sr.storeyId);
+              if (!steps.length) return null;
+              return [
+                ...steps.map((b, i) => (
+                  <tr key={`${sr.storeyId}-${i}`}>
+                    <td>{i === 0 ? sr.name : ''}</td>
+                    <td>{b.umriss}</td>
+                    <td>{b.bezeichnung}</td>
+                    <td className="formula">{b.formel}</td>
+                    <td className="num">{fmt2(b.volumen)}</td>
+                  </tr>
+                )),
+                <tr key={`${sr.storeyId}-sum`} className="subtotal">
+                  <td />
+                  <td colSpan={3}>BRI {sr.name}</td>
+                  <td className="num">{fmt2(sr.bri.total)}</td>
+                </tr>,
+              ];
+            })}
+            <tr className="sum">
+              <td colSpan={4}>Brutto-Rauminhalt gesamt</td>
+              <td className="num">{fmt2(r.total.bri.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="report-note">
+          Teilkörper: Anzahl × Länge × Breite (bzw. Grundfläche) × Höhe × Formfaktor (½ Prisma/Keil, ⅓ Walmende/Pyramide, ⅙ Krüppelwalm-Abzug).
+          „Mittlere Höhe“: Volumen exakt aus den Dachflächen bzw. dem IFC-Modell, als Grundfläche × mittlere Höhe dargestellt.
         </p>
 
         <h2>Netto-Raumfläche nach Nutzungsgruppen</h2>
