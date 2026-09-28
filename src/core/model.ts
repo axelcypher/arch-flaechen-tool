@@ -1,4 +1,6 @@
 import type { Point } from './geometry';
+import type { Dach } from './roof';
+import type { DachModell } from './roofMesh';
 
 /**
  * Datenmodell eines Projekts. Alle Längen in Metern.
@@ -47,6 +49,8 @@ export interface OutlineShape extends ShapeBase {
   kind: 'outline';
   /** abweichende Höhe für BRI (z. B. Galerie, Luftraum); sonst Geschosshöhe */
   hoehe?: number;
+  /** Dach/oberer Abschluss: BRI dieses Umrisses = Volumen vom Fußboden bis zur Dachhaut */
+  dach?: Dach;
 }
 
 export interface RoomShape extends ShapeBase {
@@ -124,6 +128,8 @@ export interface Storey {
   name: string;
   /** Brutto-Geschosshöhe (OK Fußboden bis OK Fußboden darüber bzw. OK Dach) für BRI */
   hoehe: number;
+  /** Höhe OK Fußboden über ±0,00 in m; ohne Angabe Summe der Geschosshöhen darunter */
+  elevation?: number;
   shapes: Shape[];
   background?: Background;
 }
@@ -147,6 +153,8 @@ export interface Project {
   meta: ProjectMeta;
   settings: ProjectSettings;
   storeys: Storey[];
+  /** Dachhaut aus einem importierten Gebäudemodell (IFC) für Dächer vom Typ "modell" */
+  dachModell?: DachModell;
 }
 
 let idCounter = 0;
@@ -186,4 +194,16 @@ export function createRoom(points: Point[], nummer: string, name = 'Raum'): Room
     nutzung: 'NUF1',
     wofl: { kategorie: 'keine', wohnung: '' },
   };
+}
+
+/** Fußbodenhöhen aller Geschosse (explizit oder als Summe der Geschosshöhen, unterstes Geschoss = 0) */
+export function storeyElevations(p: Project): number[] {
+  const out: number[] = [];
+  let z = 0;
+  for (const s of p.storeys) {
+    const e = s.elevation ?? z;
+    out.push(e);
+    z = e + s.hoehe;
+  }
+  return out;
 }

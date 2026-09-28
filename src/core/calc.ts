@@ -1,5 +1,8 @@
 import { polygonArea } from './geometry';
-import type { Nutzungsgruppe, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
+import type { Nutzungsgruppe, OutlineShape, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
+import { storeyElevations } from './model';
+import { roofStats } from './roof';
+import { meshRoofStats } from './roofMesh';
 import { nutzungInfo, woflFaktor } from './norms';
 
 /**
@@ -81,6 +84,19 @@ function emptyTotals(): AreaTotals {
   return { bgf: rs(), bri: rs(), nutzung: emptyNutzung(), nuf: rs(), tf: rs(), vf: rs(), nrf: rs(), kgf: rs(), wofl: 0 };
 }
 
+/** Rauminhalt eines BGF-Umrisses (ohne Vorzeichen): Fläche × Höhe bzw. bis zur Dachhaut */
+export function outlineVolume(s: OutlineShape, storey: Storey, project: Project): number {
+  const h = s.hoehe ?? storey.hoehe;
+  if (!s.dach) return polygonArea(s.points) * h;
+  if (s.dach.typ === 'modell') {
+    if (!project.dachModell) return polygonArea(s.points) * h;
+    const idx = project.storeys.indexOf(storey);
+    const floorZ = storeyElevations(project)[idx] ?? 0;
+    return meshRoofStats(project.dachModell, s.points, floorZ, h, s.dach.maxHoehe).volumen;
+  }
+  return Math.abs(roofStats(s.dach, s.points).volumen);
+}
+
 export function computeStorey(storey: Storey, project: Project): StoreyResult {
   const t = emptyTotals();
   const rooms: RoomResult[] = [];
@@ -90,7 +106,7 @@ export function computeStorey(storey: Storey, project: Project): StoreyResult {
     const a = sign * polygonArea(s.points);
     if (s.kind === 'outline') {
       addRS(t.bgf, s.umschliessung, a);
-      addRS(t.bri, s.umschliessung, a * (s.hoehe ?? storey.hoehe));
+      addRS(t.bri, s.umschliessung, sign * outlineVolume(s, storey, project));
     } else {
       t.nutzung[s.nutzung] += a;
       const bereich = nutzungInfo(s.nutzung).bereich;

@@ -6,6 +6,12 @@ import { parseProject } from '../core/serialize';
 
 export type Tool = 'select' | 'polygon' | 'rect' | 'detect' | 'measure' | 'calibrate';
 
+/** Importiertes IFC-Modell zur Anzeige in der 3D-Ansicht (nur für die Sitzung, nicht im Projekt gespeichert) */
+export interface IfcReference {
+  name: string;
+  meshes: { type: string; positions: Float32Array; indices: Uint32Array; color: [number, number, number, number] }[];
+}
+
 export interface DetectSettings {
   /** größte zu schließende Öffnung in m (Türbreite) */
   gap: number;
@@ -46,6 +52,8 @@ interface EditorState {
   reportOpen: boolean;
   excelOpen: boolean;
   detect: DetectSettings;
+  mainView: '2d' | '3d';
+  ifcModel: IfcReference | null;
 
   /** Änderung mit Undo-Schritt */
   update: (fn: (p: Project) => Project) => void;
@@ -67,6 +75,8 @@ interface EditorState {
   requestFit: () => void;
   setReportOpen: (open: boolean) => void;
   setExcelOpen: (open: boolean) => void;
+  setMainView: (v: '2d' | '3d') => void;
+  setIfcModel: (m: IfcReference | null) => void;
   setDetect: (d: Partial<DetectSettings>) => void;
 }
 
@@ -94,6 +104,8 @@ export const useEditor = create<EditorState>((set, get) => {
     reportOpen: false,
     excelOpen: false,
     detect: loadDetectSettings(),
+    mainView: '2d',
+    ifcModel: null,
 
     update: (fn) => {
       const { project, past } = get();
@@ -146,6 +158,8 @@ export const useEditor = create<EditorState>((set, get) => {
     requestFit: () => set({ fitRequest: get().fitRequest + 1 }),
     setReportOpen: (open) => set({ reportOpen: open }),
     setExcelOpen: (open) => set({ excelOpen: open }),
+    setMainView: (v) => set({ mainView: v }),
+    setIfcModel: (m) => set({ ifcModel: m }),
     setDetect: (d) => {
       const detect = { ...get().detect, ...d };
       set({ detect });

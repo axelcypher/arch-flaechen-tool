@@ -6,6 +6,7 @@ import type { Nutzungsgruppe, Raumumschliessung, Shape, WoflKategorie } from '..
 import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflFaktor } from '../core/norms';
 import { mapShape, mapStorey, useActiveStorey, useEditor, useSelectedShape } from '../store/store';
 import { BackgroundPanel } from './BackgroundPanel';
+import { RoofEditor } from './RoofEditor';
 import { Field, NumberField, TextField } from './fields';
 
 /** Rechte Seitenleiste: Eigenschaften der Auswahl bzw. des Geschosses + Kurzauswertung. */
@@ -93,6 +94,9 @@ function ShapeProperties({ shape }: { shape: Shape }) {
         <Field label="Abweichende Höhe für BRI [m]" hint={`leer = Geschosshöhe (${fmt2(storey.hoehe)} m)`}>
           <NumberField value={shape.hoehe} allowEmpty min={0} onChange={(v) => upd((s) => ({ ...s, hoehe: v }))} placeholder={fmt2(storey.hoehe)} />
         </Field>
+      )}
+      {shape.kind === 'outline' && (
+        <RoofEditor shape={shape} storey={storey} project={project} onChange={(dach) => upd((s) => (s.kind === 'outline' ? { ...s, dach } : s))} />
       )}
 
       {shape.kind === 'room' && (
