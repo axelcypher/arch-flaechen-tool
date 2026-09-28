@@ -85,7 +85,7 @@ export function Report() {
           </tbody>
         </table>
         <p className="report-note">
-          R = Regelfall der Raumumschließung, S = Sonderfall. KGF = BGF − NRF (rechnerisch). BRI = Σ Umrissfläche × Geschosshöhe bzw. abweichende Höhe.
+          R = Regelfall der Raumumschließung, S = Sonderfall. KGF = BGF − NRF (rechnerisch). BRI = Σ Umrissfläche × Geschosshöhe bzw. Volumen bis zur Dachhaut (Dachform oder Dach aus IFC-Modell).
         </p>
 
         <h2>Netto-Raumfläche nach Nutzungsgruppen</h2>

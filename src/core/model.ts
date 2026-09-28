@@ -1,4 +1,6 @@
 import type { Point } from './geometry';
+import type { Dach } from './roof';
+import type { DachModell } from './roofMesh';
 
 /**
  * Datenmodell eines Projekts. Alle Längen in Metern.
@@ -47,6 +49,8 @@ export interface OutlineShape extends ShapeBase {
   kind: 'outline';
   /** abweichende Höhe für BRI (z. B. Galerie, Luftraum); sonst Geschosshöhe */
   hoehe?: number;
+  /** Dach/oberer Abschluss: BRI dieses Umrisses = Volumen vom Fußboden bis zur Dachhaut */
+  dach?: Dach;
 }
 
 export interface RoomShape extends ShapeBase {
@@ -54,6 +58,8 @@ export interface RoomShape extends ShapeBase {
   nummer: string;
   nutzung: Nutzungsgruppe;
   wofl: WoflAngaben;
+  /** Abzug in % von der Polygonfläche, z. B. 3 % Putzabzug bei Ermittlung aus Rohbaumaßen */
+  putzabzug?: number;
 }
 
 export type Shape = OutlineShape | RoomShape;
@@ -124,6 +130,8 @@ export interface Storey {
   name: string;
   /** Brutto-Geschosshöhe (OK Fußboden bis OK Fußboden darüber bzw. OK Dach) für BRI */
   hoehe: number;
+  /** Höhe OK Fußboden über ±0,00 in m; ohne Angabe Summe der Geschosshöhen darunter */
+  elevation?: number;
   shapes: Shape[];
   background?: Background;
 }
@@ -147,6 +155,8 @@ export interface Project {
   meta: ProjectMeta;
   settings: ProjectSettings;
   storeys: Storey[];
+  /** Dachhaut aus einem importierten Gebäudemodell (IFC) für Dächer vom Typ "modell" */
+  dachModell?: DachModell;
 }
 
 let idCounter = 0;
@@ -186,4 +196,36 @@ export function createRoom(points: Point[], nummer: string, name = 'Raum'): Room
     nutzung: 'NUF1',
     wofl: { kategorie: 'keine', wohnung: '' },
   };
+}
+
+/** Fußbodenhöhen aller Geschosse (explizit oder als Summe der Geschosshöhen, unterstes Geschoss = 0) */
+export function storeyElevations(p: Project): number[] {
+  const out: number[] = [];
+  let z = 0;
+  for (const s of p.storeys) {
+    const e = s.elevation ?? z;
+    out.push(e);
+    z = e + s.hoehe;
+  }
+  return out;
+}
+
+/** Anrechenbare Grundfläche eines Raums (Polygonfläche abzüglich Putzabzug) */
+export function roomArea(r: RoomShape): number {
+  return polygonAreaAbs(r.points) * (1 - (r.putzabzug ?? 0) / 100);
+}
+
+function polygonAreaAbs(pts: Point[]): number {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(s) / 2;
+}
+
+/** Fläche einer Form wie in der Auswertung (Räume inkl. Putzabzug), ohne Vorzeichen */
+export function shapeArea(s: Shape): number {
+  return s.kind === 'room' ? roomArea(s) : polygonAreaAbs(s.points);
 }

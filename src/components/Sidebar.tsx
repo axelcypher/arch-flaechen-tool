@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { computeStorey } from '../core/calc';
 import { fmt2 } from '../core/format';
-import { polygonArea } from '../core/geometry';
+import { shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import { addStorey, duplicateStorey, moveStorey, removeStorey, useActiveStorey, useEditor } from '../store/store';
 import { Field, NumberField, TextField } from './fields';
@@ -127,7 +127,7 @@ export function Sidebar() {
               <span className="grow-text">
                 {s.name} <small>({s.umschliessung})</small>
               </span>
-              <span className="num">{fmt2(polygonArea(s.points) * (s.subtract ? -1 : 1))}</span>
+              <span className="num">{fmt2(shapeArea(s) * (s.subtract ? -1 : 1))}</span>
             </li>
           ))}
         </ul>
@@ -139,7 +139,7 @@ export function Sidebar() {
               <span className="grow-text">
                 <small>{s.nummer}</small> {s.name}
               </span>
-              <span className="num">{fmt2(polygonArea(s.points) * (s.subtract ? -1 : 1))}</span>
+              <span className="num">{fmt2(shapeArea(s) * (s.subtract ? -1 : 1))}</span>
             </li>
           ))}
         </ul>

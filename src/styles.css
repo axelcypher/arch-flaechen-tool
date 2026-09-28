@@ -789,6 +789,172 @@ select:focus {
   border: 1.5px solid #2a5bd7;
 }
 
+.toggle.block {
+  display: flex;
+  margin: 5px 0;
+}
+
+.ifc-storeys,
+.ifc-report {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.ifc-report li {
+  margin: 3px 0;
+}
+
+.modal hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+/* ---------- Ansichten ---------- */
+
+.view-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.view-pane.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.view-switch {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.view-switch button {
+  border-radius: 0;
+}
+
+.view-switch button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.view-switch button:last-child {
+  border-radius: 0 4px 4px 0;
+  margin-left: -1px;
+}
+
+.view-loading {
+  padding: 60px 20px;
+}
+
+.view3d {
+  position: absolute;
+  inset: 0;
+}
+
+.view3d-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.view3d-canvas canvas {
+  display: block;
+}
+
+.view3d-legend {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  max-width: 300px;
+}
+
+.view3d-legend table {
+  border-collapse: collapse;
+  margin: 4px 0;
+  width: 100%;
+}
+
+.view3d-legend td {
+  padding: 1px 6px 1px 0;
+}
+
+.view3d-legend tr.active td {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.view3d-legend tr.sum td {
+  border-top: 1px solid var(--text);
+  font-weight: 700;
+}
+
+.legend-items {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-items i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  opacity: 0.6;
+  vertical-align: -1px;
+}
+
+/* ---------- Dach ---------- */
+
+.roof-editor {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 2px;
+}
+
+.roof-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.roof-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 2px;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+
+.roof-choice.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.roof-icon {
+  width: 100%;
+  height: 34px;
+}
+
+.roof-ifc {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+}
+
 /* ---------- Dialoge ---------- */
 
 .modal-backdrop {

@@ -518,7 +518,7 @@ function intersect(l1: Line, l2: Line): Point | null {
   return { x: l1.p.x + l1.d.x * t, y: l1.p.y + l1.d.y * t };
 }
 
-function cleanupPolygon(pts: Point[]): Point[] {
+export function cleanupPolygon(pts: Point[]): Point[] {
   let out = pts.filter((p, i) => distance(p, pts[(i + 1) % pts.length]) > 1e-4);
   // kollineare Punkte entfernen
   let changed = true;

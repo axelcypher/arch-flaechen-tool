@@ -6,7 +6,7 @@ kalibrierten Planbild nachgezeichnet; die Anwendung ermittelt daraus:
 | Kennwert | Grundlage | Ermittlung |
 |---|---|---|
 | **BGF** – Brutto-Grundfläche | DIN 277 | Σ BGF-Umrisse je Geschoss, getrennt nach Raumumschließung **R** (Regelfall) und **S** (Sonderfall) |
-| **BRI** – Brutto-Rauminhalt | DIN 277 | Σ Umrissfläche × Geschosshöhe (oder abweichende Höhe je Umriss) |
+| **BRI** – Brutto-Rauminhalt | DIN 277 | Σ Umrissfläche × Geschosshöhe bzw. Volumen vom Fußboden bis zur Dachhaut (Dachform oder Dach aus IFC) |
 | **NRF** – Netto-Raumfläche | DIN 277 | Σ Räume = NUF 1–7 + TF 8 + VF 9 |
 | **KGF** – Konstruktions-Grundfläche | DIN 277 | BGF − NRF (rechnerisch) |
 | **WoFl** – Wohnfläche | WoFlV § 4 | Σ Raumfläche × Anrechnungsfaktor, gruppiert nach Wohnung |
@@ -17,6 +17,11 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 
 ## Funktionen
 
+- **IFC-Import** (Archicad, Revit, …): Geschosse, Zonen → Räume (inkl. Putzabzug und WoFlV-Faktor aus den
+  Raumhöhen), BGF-Umrisse aus den Bauteilen und Dachhaut für den BRI – siehe [docs/archicad-ifc.md](docs/archicad-ifc.md)
+- **Dachformen** je BGF-Umriss für den BRI: Flach-, Pult-, Sattel-, Walm-, Krüppelwalm-, Zelt-, Mansard-,
+  Mansardwalm-, Tonnen- und Sheddach mit Traufhöhe, Neigungen und Firstrichtung (exakte Volumenberechnung)
+- **3D-Ansicht** der Rauminhalte (Geschosse auseinanderziehbar, Vergleich mit dem IFC-Modell)
 - Zeichnen von **Polygonen** und **Rechtecken** als BGF-Umriss oder Raum
 - **Raum erkennen per Klick** (Werkzeug „Erkennen“): Klick in einen umschlossenen Bereich eines DXF-/PDF-/Bildplans
   oder zwischen bereits gezeichneten Flächen erzeugt die Fläche automatisch
@@ -98,7 +103,10 @@ Installer als Build-Artefakt.
   als Abzugsfläche mit derselben WoFlV-Kategorie erfassen.
 - Automatisch erkannte Flächen immer kontrollieren (Maße der Auswahl werden angezeigt). Bei Rasterplänen hängt die
   Genauigkeit von der Planqualität ab; DXF-Pläne liefern exakte Kanten.
-- DWG wird nicht direkt unterstützt – bitte als DXF exportieren.
+- DWG wird nicht direkt unterstützt – bitte als DXF exportieren. Archicad-PLN ist ein geschlossenes Format –
+  bitte IFC exportieren.
+- Dachformen spannen sich über das umschließende Rechteck in Firstrichtung auf; bei L-/T-Grundrissen mit
+  mehreren Firsten den Umriss in Teilflächen mit je eigenem Dach aufteilen.
 - Die Ergebnisse ersetzen keine fachliche Prüfung.
 
 ## Lizenz

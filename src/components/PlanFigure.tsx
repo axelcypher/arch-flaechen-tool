@@ -1,8 +1,9 @@
 import { bgWorldBounds } from '../core/background';
 import { fmt2 } from '../core/format';
 import type { Point } from '../core/geometry';
-import { bounds, labelPoint, polygonArea } from '../core/geometry';
+import { bounds, labelPoint } from '../core/geometry';
 import type { Nutzungsgruppe, Storey } from '../core/model';
+import { shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import { BackgroundLayer } from './BackgroundLayer';
 
@@ -82,7 +83,7 @@ export function PlanFigure({ storey, showBackground }: { storey: Storey; showBac
           const sh = bb.maxY - bb.minY;
           if (sw < fs * 2.5 || sh < fs * 1.2) return null;
           const lp = labelPoint(s.points, s.kind === 'outline' ? roomPts : []);
-          const area = polygonArea(s.points) * (s.subtract ? -1 : 1);
+          const area = shapeArea(s) * (s.subtract ? -1 : 1);
           const title = s.kind === 'room' ? [s.nummer, s.name].filter(Boolean).join(' ') : `${s.name} (${s.umschliessung})`;
           const two = sh > fs * 2.6 && sw > fs * Math.min(title.length * 0.55, 8);
           const f = s.kind === 'outline' ? fs * 0.85 : fs;

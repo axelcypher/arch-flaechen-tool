@@ -21,7 +21,7 @@ export default defineConfig({
     // WebView2 (Windows) ist immergrün; pdf.js benötigt eine aktuelle Engine
     target: 'es2022',
     // ExcelJS und pdf.js werden nur bei Bedarf nachgeladen
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 4000,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
   test: {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Canvas } from './components/Canvas';
 import { ExcelDialog } from './components/ExcelDialog';
 import { Properties } from './components/Properties';
@@ -7,9 +7,13 @@ import { Sidebar } from './components/Sidebar';
 import { Toolbar } from './components/Toolbar';
 import { useEditor } from './store/store';
 
+const View3D = lazy(() => import('./components/View3D'));
+
 export function App() {
   const reportOpen = useEditor((s) => s.reportOpen);
   const excelOpen = useEditor((s) => s.excelOpen);
+  const mainView = useEditor((s) => s.mainView);
+  const setMainView = useEditor((s) => s.setMainView);
   const name = useEditor((s) => s.project.name);
   const dirty = useEditor((s) => s.dirty);
 
@@ -31,7 +35,24 @@ export function App() {
       <div className="workspace">
         <Sidebar />
         <main className="main">
-          <Canvas />
+          <div className="view-switch">
+            <button className={mainView === '2d' ? 'active' : ''} onClick={() => setMainView('2d')}>
+              Grundriss
+            </button>
+            <button className={mainView === '3d' ? 'active' : ''} onClick={() => setMainView('3d')}>
+              3D
+            </button>
+          </div>
+          <div className={mainView === '2d' ? 'view-pane' : 'view-pane hidden'}>
+            <Canvas />
+          </div>
+          {mainView === '3d' && (
+            <div className="view-pane">
+              <Suspense fallback={<p className="busy view-loading">3D-Ansicht wird geladen …</p>}>
+                <View3D />
+              </Suspense>
+            </div>
+          )}
         </main>
         <Properties />
       </div>
