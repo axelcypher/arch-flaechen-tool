@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pointInPolygon, polygonArea, rectPoints } from './geometry';
 import type { Dach, DachTyp } from './roof';
-import { DACH_TYPEN, defaultDach, roofHeightAt, roofStats } from './roof';
+import { DACH_TYPEN, defaultDach, roofHeightFn, roofStats } from './roof';
 
 const rect = rectPoints({ x: 0, y: 0 }, { x: 10, y: 8 }); // First entlang x (längste Kante)
 const d = (typ: DachTyp, extra: Partial<Dach> = {}): Dach => ({ ...defaultDach(typ, 3), ...extra });
@@ -14,11 +14,12 @@ function numeric(dach: Dach, pts: { x: number; y: number }[], n = 400) {
   const y0 = Math.min(...ys);
   const dx = (Math.max(...xs) - x0) / n;
   const dy = (Math.max(...ys) - y0) / n;
+  const h = roofHeightFn(dach, pts);
   let v = 0;
   for (let i = 0; i < n; i++)
     for (let j = 0; j < n; j++) {
       const p = { x: x0 + (i + 0.5) * dx, y: y0 + (j + 0.5) * dy };
-      if (pointInPolygon(p, pts)) v += roofHeightAt(dach, pts, p) * dx * dy;
+      if (pointInPolygon(p, pts)) v += h(p) * dx * dy;
     }
   return v;
 }

@@ -357,12 +357,19 @@ export function roofStats(d: Dach, pts: Point[]): RoofStats {
   return { volumen: vol, dachvolumen: vol - area * d.traufhoehe, firsthoehe: maxH, frame };
 }
 
-export function roofHeightAt(d: Dach, pts: Point[], p: Point): number {
+/** Höhenfunktion h(x, y) über Fußboden; Teilstücke werden einmal vorberechnet. */
+export function roofHeightFn(d: Dach, pts: Point[]): (p: Point) => number {
   const { pieces } = roofPieces(d, pts);
-  let best = -Infinity;
-  // Stück finden, dessen Bedingungen erfüllt sind (bei min-Dächern entspricht das dem Minimum)
-  for (const pc of pieces) if (pc.cons.every((g) => evalL(g, p) <= 1e-9)) best = Math.max(best, evalL(pc.f, p));
-  return best;
+  return (p) => {
+    let best = -Infinity;
+    // Stück finden, dessen Bedingungen erfüllt sind (bei min-Dächern entspricht das dem Minimum)
+    for (const pc of pieces) if (pc.cons.every((g) => evalL(g, p) <= 1e-9)) best = Math.max(best, evalL(pc.f, p));
+    return best;
+  };
+}
+
+export function roofHeightAt(d: Dach, pts: Point[], p: Point): number {
+  return roofHeightFn(d, pts)(p);
 }
 
 /* ---------- Körpergeometrie (für 3D-Ansicht und Symbole) ---------- */
