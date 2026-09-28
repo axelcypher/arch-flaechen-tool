@@ -18,7 +18,10 @@ export default defineConfig({
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {
-    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'es2022',
+    // WebView2 (Windows) ist immergrün; pdf.js benötigt eine aktuelle Engine
+    target: 'es2022',
+    // ExcelJS und pdf.js werden nur bei Bedarf nachgeladen
+    chunkSizeWarningLimit: 1500,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
   test: {

@@ -14,10 +14,16 @@ import {
   translate,
 } from '../core/geometry';
 import { fmt2, parseNum } from '../core/format';
+import { NumberField } from './fields';
 import type { Shape, Storey } from '../core/model';
 import { createOutline, createRoom } from '../core/model';
 import { nutzungInfo } from '../core/norms';
+import { bgWorldBounds, scaleAround, vectorSegmentGrid } from '../core/background';
+import { detectRegion } from '../core/detect';
+import { SegmentGrid } from '../core/spatial';
+import { loadImage, rasterEdgeRefiner, rasterMaskProvider } from '../platform/rasterMask';
 import { mapStorey, nextRoomNumber, setShapePoints, useActiveStorey, useEditor } from '../store/store';
+import { BackgroundLayer } from './BackgroundLayer';
 
 interface Viewport {
   /** Pixel pro Meter */
@@ -89,7 +95,8 @@ export function Canvas() {
     const pts: Point[] = storey.shapes.flatMap((s) => s.points);
     const bg = storey.background;
     if (bg && bg.visible) {
-      pts.push({ x: bg.x, y: bg.y }, { x: bg.x + bg.widthPx * bg.metersPerPixel, y: bg.y + bg.heightPx * bg.metersPerPixel });
+      const b = bgWorldBounds(bg);
+      pts.push({ x: b.minX, y: b.minY }, { x: b.maxX, y: b.maxY });
     }
     const el = svgRef.current;
     const w = el?.clientWidth || size.w;
@@ -150,6 +157,12 @@ export function Canvas() {
     return shapes;
   }, [storey, ghost, view.showOutlines, view.showRooms]);
 
+  const bgVisible = !!storey.background?.visible && view.showBackground;
+  const vectorGrid = useMemo(
+    () => (bgVisible && storey.background?.type === 'vector' ? vectorSegmentGrid(storey.background) : null),
+    [bgVisible, storey.background],
+  );
+
   const snap = useCallback(
     (raw: Point, mods: { alt: boolean; shift: boolean }, origin: Point | null, exclude?: { shapeId: string; index: number }) => {
       if (mods.alt) return { p: raw, kind: 'none' as SnapKind };
@@ -179,6 +192,12 @@ export function Canvas() {
           });
         }
         draft.forEach(consider);
+        const near = vectorGrid ? vectorGrid.query(raw.x - vTol, raw.y - vTol, raw.x + vTol, raw.y + vTol) : [];
+        for (const i of near) {
+          const [x1, y1, x2, y2] = vectorGrid!.seg(i);
+          consider({ x: x1, y: y1 });
+          consider({ x: x2, y: y2 });
+        }
         if (best) return { p: { ...(best as Point) }, kind: 'vertex' as SnapKind };
 
         const eTol = EDGE_SNAP_PX / vp.scale;
@@ -195,6 +214,15 @@ export function Canvas() {
             }
           }
         }
+        const eNear = vectorGrid ? vectorGrid.query(raw.x - eTol, raw.y - eTol, raw.x + eTol, raw.y + eTol) : [];
+        for (const i of eNear) {
+          const [x1, y1, x2, y2] = vectorGrid!.seg(i);
+          const pr = projectOnSegment(raw, { x: x1, y: y1 }, { x: x2, y: y2 });
+          if (pr.dist < bestED) {
+            bestED = pr.dist;
+            bestE = pr.point;
+          }
+        }
         if (bestE) {
           const e = bestE as Point;
           return { p: { x: roundTo(e.x, 1e-4), y: roundTo(e.y, 1e-4) }, kind: 'edge' as SnapKind };
@@ -203,7 +231,7 @@ export function Canvas() {
       if (view.snapGrid) return { p: snapToGrid(raw, gridStep), kind: 'grid' as SnapKind };
       return { p: raw, kind: 'none' as SnapKind };
     },
-    [view.snapGrid, view.snapVertices, gridStep, vp.scale, snapCandidates, draft],
+    [view.snapGrid, view.snapVertices, gridStep, vp.scale, snapCandidates, draft, vectorGrid],
   );
 
   /* ---------- Formen anlegen ---------- */
@@ -337,6 +365,10 @@ export function Canvas() {
         case 'M':
           setTool('measure');
           break;
+        case 'e':
+        case 'E':
+          setTool('detect');
+          break;
         case 'b':
         case 'B':
           st.setDrawKind('outline');
@@ -430,6 +462,9 @@ export function Canvas() {
           setDraft([]);
         }
         break;
+      case 'detect':
+        void runDetection(raw);
+        break;
       case 'calibrate':
         if (!storey.background) break;
         if (draft.length === 0) setDraft([p]);
@@ -438,6 +473,58 @@ export function Canvas() {
           setDraft([]);
         }
         break;
+    }
+  };
+
+  const detect = useEditor((s) => s.detect);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 5000);
+    return () => clearTimeout(t);
+  }, [message]);
+
+  const runDetection = async (click: Point) => {
+    if (busy) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const grids: SegmentGrid[] = [];
+      const bg = storey.background;
+      if (bg && bgVisible && bg.type === 'vector') grids.push(vectorSegmentGrid(bg, { skipArcs: detect.skipArcs }));
+      // Kanten vorhandener (sichtbarer) Flächen begrenzen ebenfalls
+      const edges: number[] = [];
+      for (const s of storey.shapes) {
+        if ((s.kind === 'outline' && !view.showOutlines) || (s.kind === 'room' && !view.showRooms)) continue;
+        const n = s.points.length;
+        for (let i = 0; i < n; i++) {
+          const a = s.points[i];
+          const b = s.points[(i + 1) % n];
+          edges.push(a.x, a.y, b.x, b.y);
+        }
+      }
+      if (edges.length) grids.push(new SegmentGrid(edges));
+      let rasterMask: ReturnType<typeof rasterMaskProvider> | undefined;
+      let refineEdge: ReturnType<typeof rasterEdgeRefiner> | undefined;
+      if (bg && bgVisible && bg.type === 'raster') {
+        const img = await loadImage(bg.dataUrl);
+        rasterMask = rasterMaskProvider(bg, img, detect.threshold);
+        refineEdge = rasterEdgeRefiner(bg, img);
+      }
+      if (!grids.length && !rasterMask) {
+        setMessage('Keine Linien vorhanden: zuerst einen Plan laden oder einen BGF-Umriss zeichnen.');
+        return;
+      }
+      // dem Browser einen Frame für die Anzeige des Wartezustands lassen
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const res = detectRegion({ click, grids, rasterMask, refineEdge, gap: detect.gap, ignoreThinLines: detect.ignoreThin ? 0.05 : 0 });
+      if (!res.ok) setMessage(res.error);
+      else finishShape(res.points);
+    } catch (e) {
+      setMessage(`Erkennung fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -542,12 +629,7 @@ export function Canvas() {
     const [a, b] = calib;
     const measured = distance(a, b);
     if (measured < 1e-9 || !(realLength > 0)) return;
-    const mpp = bg.metersPerPixel * (realLength / measured);
-    const u = (a.x - bg.x) / bg.metersPerPixel;
-    const v = (a.y - bg.y) / bg.metersPerPixel;
-    update((p) =>
-      mapStorey(p, storey.id, (s) => ({ ...s, background: { ...bg, metersPerPixel: mpp, x: a.x - u * mpp, y: a.y - v * mpp } })),
-    );
+    update((p) => mapStorey(p, storey.id, (s) => ({ ...s, background: scaleAround(bg, realLength / measured, a) })));
     setCalib(null);
     setTool('select');
     requestAnimationFrame(() => fitRef.current());
@@ -686,15 +768,20 @@ export function Canvas() {
     case 'rect':
       hint = draft.length ? 'Gegenecke klicken oder Maße eingeben, z. B. 4,5x3,2 + Enter' : `Erste Ecke setzen (${drawKind === 'outline' ? 'BGF-Umriss' : 'Raum'})`;
       break;
+    case 'detect':
+      hint = busy
+        ? 'Erkenne Fläche …'
+        : `In einen umschlossenen Bereich klicken – die Fläche wird als ${drawKind === 'outline' ? 'BGF-Umriss' : 'Raum'} angelegt (Türöffnungen bis ${fmt2(detect.gap)} m werden geschlossen)`;
+      break;
     case 'measure':
       hint = 'Zwei Punkte klicken, um einen Abstand zu messen';
       break;
     case 'calibrate':
-      hint = bg ? 'Zwei Punkte mit bekanntem Abstand auf dem Plan anklicken' : 'Zuerst ein Hintergrundbild laden (Geschoss-Eigenschaften)';
+      hint = bg ? 'Zwei Punkte mit bekanntem Abstand auf dem Plan anklicken' : 'Zuerst einen Plan laden (Geschoss-Eigenschaften rechts)';
       break;
   }
 
-  const cursorStyle = drag.current?.kind === 'pan' || spaceDown ? 'grabbing' : tool === 'select' ? 'default' : 'crosshair';
+  const cursorStyle = busy ? 'progress' : drag.current?.kind === 'pan' || spaceDown ? 'grabbing' : tool === 'select' ? 'default' : tool === 'detect' ? 'cell' : 'crosshair';
 
   return (
     <div className="canvas-wrap">
@@ -720,18 +807,7 @@ export function Canvas() {
         </defs>
 
         <rect width={size.w} height={size.h} className="canvas-bg" />
-        {bg && bg.visible && view.showBackground && (
-          <image
-            href={bg.dataUrl}
-            x={bg.x * vp.scale + vp.tx}
-            y={bg.y * vp.scale + vp.ty}
-            width={bg.widthPx * bg.metersPerPixel * vp.scale}
-            height={bg.heightPx * bg.metersPerPixel * vp.scale}
-            opacity={bg.opacity}
-            preserveAspectRatio="none"
-            style={{ pointerEvents: 'none' }}
-          />
-        )}
+        {bg && view.showBackground && <BackgroundLayer bg={bg} k={vp.scale} tx={vp.tx} ty={vp.ty} />}
         <path d={grid.minorPath} className="grid-minor" />
         <path d={grid.majorPath} className="grid-major" />
 
@@ -879,6 +955,44 @@ export function Canvas() {
           ⤢ Alles
         </button>
       </div>
+      {tool === 'detect' && (
+        <div className="canvas-controls detect-controls">
+          <label className="toggle" title="Größte Öffnung (z. B. Türbreite), die beim Erkennen geschlossen wird. Muss kleiner sein als der schmalste Raum.">
+            Lückenschluss
+            <NumberField value={detect.gap} min={0} max={5} onChange={(v) => v !== undefined && useEditor.getState().setDetect({ gap: v })} />m
+          </label>
+          {bg?.type === 'vector' && (
+            <label className="toggle" title="Bögen und Kreise (z. B. Türaufschläge) nicht als Begrenzung verwenden">
+              <input type="checkbox" checked={detect.skipArcs} onChange={(e) => useEditor.getState().setDetect({ skipArcs: e.target.checked })} />
+              Bögen ignorieren
+            </label>
+          )}
+          {bg?.type === 'raster' && (
+            <label className="toggle" title="Dünne Linien (Türaufschläge, Möbel) nicht als Begrenzung verwenden – solange der Raum trotzdem geschlossen ist">
+              <input type="checkbox" checked={detect.ignoreThin} onChange={(e) => useEditor.getState().setDetect({ ignoreThin: e.target.checked })} />
+              dünne Linien ignorieren
+            </label>
+          )}
+          {bg?.type === 'raster' && (
+            <label className="toggle" title="Pixel dunkler als dieser Wert gelten als Wand/Linie">
+              Schwelle
+              <input
+                type="range"
+                min={60}
+                max={250}
+                step={5}
+                value={detect.threshold}
+                onChange={(e) => useEditor.getState().setDetect({ threshold: Number(e.target.value) })}
+              />
+            </label>
+          )}
+        </div>
+      )}
+      {message && (
+        <div className="canvas-message" onClick={() => setMessage(null)}>
+          {message}
+        </div>
+      )}
 
       {calib && <CalibrationDialog measured={distance(calib[0], calib[1])} onApply={applyCalibration} onCancel={() => setCalib(null)} />}
     </div>

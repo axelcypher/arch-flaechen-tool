@@ -9,6 +9,7 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Auswählen', key: 'V', icon: '⬉' },
   { id: 'polygon', label: 'Polygon', key: 'P', icon: '⬠' },
   { id: 'rect', label: 'Rechteck', key: 'R', icon: '▭' },
+  { id: 'detect', label: 'Erkennen', key: 'E', icon: '⊡' },
   { id: 'measure', label: 'Messen', key: 'M', icon: '📏' },
   { id: 'calibrate', label: 'Kalibrieren', key: '', icon: '⇔' },
 ];
@@ -119,6 +120,9 @@ export function Toolbar() {
       <div className="tb-group">
         <button onClick={onCsv} title="Flächenaufstellung als CSV exportieren">
           CSV
+        </button>
+        <button onClick={() => st.setExcelOpen(true)} title="Excel-Export (Standardlayout oder eigene Vorlage)">
+          Excel
         </button>
         <button className="primary" onClick={() => st.setReportOpen(true)}>
           Flächenaufstellung

@@ -59,18 +59,65 @@ export interface RoomShape extends ShapeBase {
 export type Shape = OutlineShape | RoomShape;
 export type ShapeKind = Shape['kind'];
 
-export interface BackgroundImage {
-  dataUrl: string;
+interface BackgroundBase {
   name: string;
-  widthPx: number;
-  heightPx: number;
-  /** Weltkoordinate der linken oberen Bildecke */
+  /** Weltkoordinate des lokalen Ursprungs (Raster: linke obere Bildecke) */
   x: number;
   y: number;
-  metersPerPixel: number;
   opacity: number;
   visible: boolean;
 }
+
+/** Rasterbild (PNG/JPG oder gerenderte PDF-Seite). */
+export interface RasterBackground extends BackgroundBase {
+  type: 'raster';
+  dataUrl: string;
+  widthPx: number;
+  heightPx: number;
+  metersPerPixel: number;
+  /** Bei PDF-Seiten: Meter pro Pixel bei Maßstab 1:1 – erlaubt die Eingabe des Planmaßstabs */
+  pdf?: { page: number; metersPerPixelAt1: number };
+}
+
+export interface DxfLayer {
+  name: string;
+  color: string;
+  visible: boolean;
+}
+
+/** Linienzug in lokalen Koordinaten (DXF-Einheiten, y nach unten), flach: [x0, y0, x1, y1, …] */
+export interface DxfPolyline {
+  layer: number;
+  pts: number[];
+  closed: boolean;
+  /** aus Bogen/Kreis/Ellipse entstanden (z. B. Türaufschlag) */
+  arc?: boolean;
+}
+
+export interface DxfText {
+  layer: number;
+  x: number;
+  y: number;
+  h: number;
+  /** Drehung in Grad (im Uhrzeigersinn, da y nach unten) */
+  rot: number;
+  text: string;
+}
+
+/** Vektorplan (DXF). Weltkoordinate = (x, y) + lokal × scale */
+export interface VectorBackground extends BackgroundBase {
+  type: 'vector';
+  /** Meter je DXF-Zeichnungseinheit (mm → 0,001) */
+  scale: number;
+  layers: DxfLayer[];
+  polylines: DxfPolyline[];
+  texts: DxfText[];
+}
+
+export type Background = RasterBackground | VectorBackground;
+
+/** @deprecated Altname, nur für Kompatibilität */
+export type BackgroundImage = RasterBackground;
 
 export interface Storey {
   id: string;
@@ -78,7 +125,7 @@ export interface Storey {
   /** Brutto-Geschosshöhe (OK Fußboden bis OK Fußboden darüber bzw. OK Dach) für BRI */
   hoehe: number;
   shapes: Shape[];
-  background?: BackgroundImage;
+  background?: Background;
 }
 
 export interface ProjectSettings {

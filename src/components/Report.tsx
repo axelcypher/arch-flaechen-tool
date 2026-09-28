@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { AreaTotals } from '../core/calc';
 import { computeProject } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { NUF_IDS, nutzungInfo, WOFL_KATEGORIEN } from '../core/norms';
 import { useEditor } from '../store/store';
+import { PlanFigure } from './PlanFigure';
 
 /** Druckbare Flächenaufstellung (DIN 277 / WoFlV). */
 export function Report() {
@@ -11,6 +12,8 @@ export function Report() {
   const setOpen = useEditor((s) => s.setReportOpen);
   const r = useMemo(() => computeProject(project), [project]);
   const today = new Date().toLocaleDateString('de-DE');
+  const [showPlans, setShowPlans] = useState(true);
+  const [showBackground, setShowBackground] = useState(false);
 
   const din277Row = (name: string, h: number | null, t: AreaTotals, cls = '') => (
     <tr className={cls} key={name}>
@@ -32,6 +35,14 @@ export function Report() {
     <div className="report-backdrop">
       <div className="report">
         <div className="report-actions no-print">
+          <label className="toggle">
+            <input type="checkbox" checked={showPlans} onChange={(e) => setShowPlans(e.target.checked)} />
+            Grundrisse
+          </label>
+          <label className="toggle">
+            <input type="checkbox" checked={showBackground} disabled={!showPlans} onChange={(e) => setShowBackground(e.target.checked)} />
+            Hintergrundplan
+          </label>
           <button onClick={() => window.print()}>Drucken / PDF</button>
           <button className="primary" onClick={() => setOpen(false)}>
             Schließen
@@ -107,53 +118,71 @@ export function Report() {
           </tbody>
         </table>
 
-        <h2>Raumliste</h2>
-        <table className="report-table">
-          <thead>
-            <tr>
-              <th>Geschoss</th>
-              <th>Nr.</th>
-              <th>Raum</th>
-              <th>Nutzung</th>
-              <th>R/S</th>
-              <th>Fläche [m²]</th>
-              <th>WoFlV</th>
-              <th>Faktor</th>
-              <th>WoFl [m²]</th>
-              <th>Wohnung</th>
-            </tr>
-          </thead>
-          <tbody>
-            {r.storeys.flatMap((s) =>
-              s.rooms.map((room) => (
-                <tr key={room.shapeId}>
-                  <td>{room.storeyName}</td>
-                  <td>{room.nummer}</td>
-                  <td>
-                    {room.name}
-                    {room.subtract && <em> (Abzug)</em>}
-                  </td>
-                  <td>{nutzungInfo(room.nutzung).kurz}</td>
-                  <td>{room.umschliessung}</td>
-                  <td className="num">{fmt2(room.area)}</td>
-                  <td>{room.woflKategorie === 'keine' ? '–' : WOFL_KATEGORIEN.find((k) => k.id === room.woflKategorie)?.label}</td>
-                  <td className="num">{room.woflKategorie === 'keine' ? '' : fmt2(room.woflFaktor)}</td>
-                  <td className="num">{room.woflKategorie === 'keine' ? '' : fmt2(room.woflArea)}</td>
-                  <td>{room.wohnung}</td>
-                </tr>
-              )),
-            )}
-            {r.storeys.every((s) => s.rooms.length === 0) && (
-              <tr>
-                <td colSpan={10} className="muted">
-                  Keine Räume erfasst.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {r.storeys.map((sr, idx) => {
+          const storey = project.storeys[idx];
+          return (
+            <section key={sr.storeyId} className={`report-storey${showPlans ? ' page-break' : ''}`}>
+              <h2>
+                {showPlans ? 'Grundriss und Raumliste' : 'Raumliste'} – {sr.name}
+              </h2>
+              <p className="report-keyfigures">
+                BGF {fmt2(sr.bgf.total)} m² · BRI {fmt2(sr.bri.total)} m³ · NRF {fmt2(sr.nrf.total)} m² · KGF {fmt2(sr.kgf.total)} m²
+                {sr.wofl ? ` · WoFl ${fmt2(sr.wofl)} m²` : ''}
+              </p>
+              {showPlans && <PlanFigure storey={storey} showBackground={showBackground} />}
+              {sr.rooms.length > 0 ? (
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>Nr.</th>
+                      <th>Raum</th>
+                      <th>Nutzung</th>
+                      <th>R/S</th>
+                      <th>Fläche [m²]</th>
+                      <th>WoFlV</th>
+                      <th>Faktor</th>
+                      <th>WoFl [m²]</th>
+                      <th>Wohnung</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sr.rooms.map((room) => (
+                      <tr key={room.shapeId}>
+                        <td>{room.nummer}</td>
+                        <td>
+                          {room.name}
+                          {room.subtract && <em> (Abzug)</em>}
+                        </td>
+                        <td>{nutzungInfo(room.nutzung).kurz}</td>
+                        <td>{room.umschliessung}</td>
+                        <td className="num">{fmt2(room.area)}</td>
+                        <td>{room.woflKategorie === 'keine' ? '–' : WOFL_KATEGORIEN.find((k) => k.id === room.woflKategorie)?.label}</td>
+                        <td className="num">{room.woflKategorie === 'keine' ? '' : fmt2(room.woflFaktor)}</td>
+                        <td className="num">{room.woflKategorie === 'keine' ? '' : fmt2(room.woflArea)}</td>
+                        <td>{room.wohnung}</td>
+                      </tr>
+                    ))}
+                    <tr className="sum">
+                      <td />
+                      <td>Summe {sr.name}</td>
+                      <td />
+                      <td />
+                      <td className="num">{fmt2(sr.nrf.total)}</td>
+                      <td />
+                      <td />
+                      <td className="num">{fmt2(sr.wofl)}</td>
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                <p className="muted">Keine Räume erfasst.</p>
+              )}
+            </section>
+          );
+        })}
 
-        <h2>Wohnflächen nach WoFlV</h2>
+        <h2 className={showPlans ? 'page-break' : ''}>Wohnflächen nach WoFlV</h2>
         <table className="report-table narrow">
           <thead>
             <tr>

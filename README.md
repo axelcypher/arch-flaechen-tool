@@ -18,21 +18,32 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 ## Funktionen
 
 - Zeichnen von **Polygonen** und **Rechtecken** als BGF-Umriss oder Raum
-- **Fang** auf Raster, Eckpunkte und Kanten (auch des darunterliegenden Geschosses), **Shift** = orthogonal, **Alt** = Fang aus
+- **Raum erkennen per Klick** (Werkzeug „Erkennen“): Klick in einen umschlossenen Bereich eines DXF-/PDF-/Bildplans
+  oder zwischen bereits gezeichneten Flächen erzeugt die Fläche automatisch
+  - Türöffnungen bis zum eingestellten **Lückenschluss** (Standard 1,10 m) werden bündig mit der Wandflucht geschlossen
+  - DXF: Kanten werden exakt auf die Plangeometrie eingepasst; Bögen (Türaufschläge) können ignoriert werden
+  - PDF/Bild: dünne Linien (Türaufschläge, Möbel) werden ignoriert, solange der Raum geschlossen bleibt;
+    Kanten werden auf dem Originalbild subpixelgenau an die Wandkante geschoben
+- **Hintergrundpläne**: **PDF** (Seite wählbar, direkte Maßstabseingabe 1:M), **DXF** (Layer ein-/ausblenden,
+  Einheit aus `$INSUNITS`, Blöcke, Bemaßungen, Texte) sowie **PNG/JPG**; Kalibrierung über eine bekannte Strecke
+- **Fang** auf Raster, Eckpunkte und Kanten (auch DXF-Geometrie und darunterliegendes Geschoss), **Shift** = orthogonal, **Alt** = Fang aus
 - **Numerische Eingabe** beim Zeichnen: Länge tippen + Enter (in Mausrichtung), `dx;dy` relativ, Rechteck `4,5x3,2`
 - Eckpunkte ziehen, auf Kantenmitte ziehen = Punkt einfügen, Rechtsklick = Punkt löschen, Koordinaten-Tabelle
 - **Abzugsflächen** (Innenhof, Schacht, Treppenloch, Schornstein …)
 - Mehrere **Geschosse**, Geschoss duplizieren (Regelgeschosse), darunterliegendes Geschoss einblenden
-- **Hintergrundplan** (PNG/JPG) laden und über eine bekannte Strecke **kalibrieren**
 - Messen-Werkzeug, Maßketten der ausgewählten Fläche, Maßstabsleiste
-- Live-Auswertung je Geschoss und gesamt, **Flächenaufstellung** zum Drucken/PDF, **CSV-Export** (Excel, Dezimalkomma)
-- Rückgängig/Wiederholen, automatische Zwischenspeicherung, Projektdateien `*.flaeche.json`
+- Live-Auswertung je Geschoss und gesamt
+- **Flächenaufstellung** zum Drucken/PDF mit **Grundriss je Geschoss** (farbig nach Nutzungsgruppe, beschriftet,
+  Maßstabsleiste, Legende, optional mit Hintergrundplan) und Raumliste je Geschoss
+- **Excel-Export** (.xlsx) im Standardlayout oder mit **eigener Vorlage** – siehe [docs/excel-vorlagen.md](docs/excel-vorlagen.md)
+- **CSV-Export** (Excel, Dezimalkomma)
+- Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB), Projektdateien `*.flaeche.json`
 
 ### Tastenkürzel
 
 | Taste | Funktion |
 |---|---|
-| `V` / `P` / `R` / `M` | Auswählen / Polygon / Rechteck / Messen |
+| `V` / `P` / `R` / `E` / `M` | Auswählen / Polygon / Rechteck / Erkennen / Messen |
 | `B` / `N` | neue Flächen als BGF-Umriss / Raum zeichnen |
 | `Enter` | Polygon schließen bzw. Zahleneingabe übernehmen |
 | `Backspace` | letzten Punkt bzw. letzte Ziffer entfernen |
@@ -46,10 +57,12 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 
 ```
 src/
-  core/        reine Fachlogik (TypeScript, ohne UI/Plattform) – Geometrie, DIN 277, WoFlV, Export, Dateiformat
+  core/        reine Fachlogik (TypeScript, ohne UI/Plattform) – Geometrie, DIN 277, WoFlV, Raumerkennung,
+               DXF-Import, Excel-Platzhalter, Export, Dateiformat
   store/       Anwendungszustand (zustand) inkl. Undo/Redo und Autosave
   components/  React-Oberfläche (SVG-Zeichenfläche, Seitenleisten, Bericht)
-  platform/    einzige plattformabhängige Stelle: Speichern/Öffnen (Tauri-Dialog bzw. Browser-Download)
+  platform/    Browser-/Plattform-APIs: Speichern/Öffnen (Tauri-Dialog bzw. Download), PDF-Rendering (pdf.js),
+               Pixelmasken für die Raumerkennung, Excel (ExcelJS)
 src-tauri/     Tauri-v2-Hülle (Rust): Fenster + nativer Speichern-Dialog
 ```
 
@@ -83,6 +96,9 @@ Installer als Build-Artefakt.
   (z. B. „Kind 1 (≥ 2 m)“ und „Kind 1 (1–2 m)“) und derselben Wohnung zuordnen.
 - Abzüge nach § 3 Abs. 3 WoFlV (Schornsteine, Pfeiler > 0,1 m², Treppen mit mehr als drei Steigungen …)
   als Abzugsfläche mit derselben WoFlV-Kategorie erfassen.
+- Automatisch erkannte Flächen immer kontrollieren (Maße der Auswahl werden angezeigt). Bei Rasterplänen hängt die
+  Genauigkeit von der Planqualität ab; DXF-Pläne liefern exakte Kanten.
+- DWG wird nicht direkt unterstützt – bitte als DXF exportieren.
 - Die Ergebnisse ersetzen keine fachliche Prüfung.
 
 ## Lizenz
