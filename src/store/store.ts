@@ -1,0 +1,236 @@
+import { create } from 'zustand';
+import type { Point } from '../core/geometry';
+import type { Project, Shape, ShapeKind, Storey } from '../core/model';
+import { createProject, createStorey, newId } from '../core/model';
+import { parseProject } from '../core/serialize';
+
+export type Tool = 'select' | 'polygon' | 'rect' | 'measure' | 'calibrate';
+
+export interface ViewOptions {
+  showOutlines: boolean;
+  showRooms: boolean;
+  showBackground: boolean;
+  showGhost: boolean;
+  showDimensions: boolean;
+  snapGrid: boolean;
+  snapVertices: boolean;
+}
+
+const HISTORY_LIMIT = 200;
+const AUTOSAVE_KEY = 'arch-flaechen-tool:autosave';
+
+interface EditorState {
+  project: Project;
+  past: Project[];
+  future: Project[];
+  /** true, wenn seit dem letzten Speichern geändert */
+  dirty: boolean;
+  activeStoreyId: string;
+  selectedShapeId: string | null;
+  tool: Tool;
+  drawKind: ShapeKind;
+  view: ViewOptions;
+  /** Zähler, um der Zeichenfläche "Zoom auf alles" zu signalisieren */
+  fitRequest: number;
+  reportOpen: boolean;
+
+  /** Änderung mit Undo-Schritt */
+  update: (fn: (p: Project) => Project) => void;
+  /** Änderung ohne Undo-Schritt (z. B. während Ziehen – vorher checkpoint() aufrufen) */
+  updateSilent: (fn: (p: Project) => Project) => void;
+  checkpoint: () => void;
+  undo: () => void;
+  redo: () => void;
+
+  loadProject: (p: Project) => void;
+  newProject: () => void;
+  markSaved: () => void;
+
+  setActiveStorey: (id: string) => void;
+  select: (id: string | null) => void;
+  setTool: (t: Tool) => void;
+  setDrawKind: (k: ShapeKind) => void;
+  setView: (v: Partial<ViewOptions>) => void;
+  requestFit: () => void;
+  setReportOpen: (open: boolean) => void;
+}
+
+export const useEditor = create<EditorState>((set, get) => {
+  const initial = loadAutosave() ?? createProject();
+  return {
+    project: initial,
+    past: [],
+    future: [],
+    dirty: false,
+    activeStoreyId: initial.storeys[0].id,
+    selectedShapeId: null,
+    tool: 'select',
+    drawKind: 'outline',
+    view: {
+      showOutlines: true,
+      showRooms: true,
+      showBackground: true,
+      showGhost: false,
+      showDimensions: true,
+      snapGrid: true,
+      snapVertices: true,
+    },
+    fitRequest: 1,
+    reportOpen: false,
+
+    update: (fn) => {
+      const { project, past } = get();
+      const next = fn(project);
+      if (next === project) return;
+      set({ project: next, past: [...past, project].slice(-HISTORY_LIMIT), future: [], dirty: true });
+      fixSelection(set, get);
+    },
+    updateSilent: (fn) => {
+      const next = fn(get().project);
+      set({ project: next, dirty: true });
+    },
+    checkpoint: () => {
+      const { project, past } = get();
+      set({ past: [...past, project].slice(-HISTORY_LIMIT), future: [] });
+    },
+    undo: () => {
+      const { past, project, future } = get();
+      if (!past.length) return;
+      set({ project: past[past.length - 1], past: past.slice(0, -1), future: [project, ...future], dirty: true });
+      fixSelection(set, get);
+    },
+    redo: () => {
+      const { past, project, future } = get();
+      if (!future.length) return;
+      set({ project: future[0], past: [...past, project], future: future.slice(1), dirty: true });
+      fixSelection(set, get);
+    },
+
+    loadProject: (p) => {
+      set({
+        project: p,
+        past: [],
+        future: [],
+        dirty: false,
+        activeStoreyId: p.storeys[0].id,
+        selectedShapeId: null,
+        tool: 'select',
+        fitRequest: get().fitRequest + 1,
+      });
+    },
+    newProject: () => get().loadProject(createProject()),
+    markSaved: () => set({ dirty: false }),
+
+    setActiveStorey: (id) => set({ activeStoreyId: id, selectedShapeId: null }),
+    select: (id) => set({ selectedShapeId: id }),
+    setTool: (t) => set({ tool: t }),
+    setDrawKind: (k) => set({ drawKind: k }),
+    setView: (v) => set({ view: { ...get().view, ...v } }),
+    requestFit: () => set({ fitRequest: get().fitRequest + 1 }),
+    setReportOpen: (open) => set({ reportOpen: open }),
+  };
+});
+
+function fixSelection(set: (s: Partial<EditorState>) => void, get: () => EditorState) {
+  const { project, activeStoreyId, selectedShapeId } = get();
+  const storey = project.storeys.find((s) => s.id === activeStoreyId) ?? project.storeys[0];
+  const patch: Partial<EditorState> = {};
+  if (storey.id !== activeStoreyId) patch.activeStoreyId = storey.id;
+  if (selectedShapeId && !storey.shapes.some((s) => s.id === selectedShapeId)) patch.selectedShapeId = null;
+  if (Object.keys(patch).length) set(patch);
+}
+
+/* ---------- Selektoren ---------- */
+
+export function useActiveStorey(): Storey {
+  return useEditor((s) => s.project.storeys.find((st) => st.id === s.activeStoreyId) ?? s.project.storeys[0]);
+}
+
+export function useSelectedShape(): Shape | null {
+  return useEditor((s) => {
+    const st = s.project.storeys.find((x) => x.id === s.activeStoreyId);
+    return st?.shapes.find((sh) => sh.id === s.selectedShapeId) ?? null;
+  });
+}
+
+/* ---------- Reine Projekt-Transformationen ---------- */
+
+export function mapStorey(p: Project, storeyId: string, fn: (s: Storey) => Storey): Project {
+  return { ...p, storeys: p.storeys.map((s) => (s.id === storeyId ? fn(s) : s)) };
+}
+
+export function mapShape(p: Project, storeyId: string, shapeId: string, fn: (s: Shape) => Shape): Project {
+  return mapStorey(p, storeyId, (st) => ({ ...st, shapes: st.shapes.map((sh) => (sh.id === shapeId ? fn(sh) : sh)) }));
+}
+
+export function setShapePoints(p: Project, storeyId: string, shapeId: string, points: Point[]): Project {
+  return mapShape(p, storeyId, shapeId, (s) => ({ ...s, points }));
+}
+
+export function addStorey(p: Project, name: string): { project: Project; id: string } {
+  const last = p.storeys[p.storeys.length - 1];
+  const st = createStorey(name, last?.hoehe ?? 3);
+  return { project: { ...p, storeys: [...p.storeys, st] }, id: st.id };
+}
+
+/** Kopiert ein Geschoss inkl. aller Flächen (neue IDs), z. B. für Regelgeschosse. */
+export function duplicateStorey(p: Project, storeyId: string): { project: Project; id: string } {
+  const idx = p.storeys.findIndex((s) => s.id === storeyId);
+  if (idx < 0) return { project: p, id: storeyId };
+  const src = p.storeys[idx];
+  const copy: Storey = {
+    ...structuredClone(src),
+    id: newId('st'),
+    name: `${src.name} (Kopie)`,
+  };
+  copy.shapes = copy.shapes.map((s) => ({ ...s, id: newId('sh') }));
+  const storeys = [...p.storeys];
+  storeys.splice(idx + 1, 0, copy);
+  return { project: { ...p, storeys }, id: copy.id };
+}
+
+export function removeStorey(p: Project, storeyId: string): Project {
+  if (p.storeys.length <= 1) return p;
+  return { ...p, storeys: p.storeys.filter((s) => s.id !== storeyId) };
+}
+
+export function moveStorey(p: Project, storeyId: string, delta: -1 | 1): Project {
+  const i = p.storeys.findIndex((s) => s.id === storeyId);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= p.storeys.length) return p;
+  const storeys = [...p.storeys];
+  [storeys[i], storeys[j]] = [storeys[j], storeys[i]];
+  return { ...p, storeys };
+}
+
+/** Nächste freie Raumnummer im Geschoss, z. B. "0.03". */
+export function nextRoomNumber(p: Project, storey: Storey): string {
+  const idx = p.storeys.findIndex((s) => s.id === storey.id);
+  const rooms = storey.shapes.filter((s) => s.kind === 'room').length;
+  return `${Math.max(0, idx)}.${String(rooms + 1).padStart(2, '0')}`;
+}
+
+/* ---------- Autosave (lokal im Browser bzw. WebView) ---------- */
+
+function loadAutosave(): Project | null {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (!raw) return null;
+    return parseProject(raw);
+  } catch {
+    return null;
+  }
+}
+
+let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+useEditor.subscribe((s, prev) => {
+  if (s.project === prev.project) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(s.project));
+    } catch {
+      // Speicher voll (z. B. große Hintergrundbilder) – Autosave ist nur ein Komfortmerkmal
+    }
+  }, 500);
+});
