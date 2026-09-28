@@ -4,8 +4,8 @@ import { fmt2 } from '../core/format';
 import { isSelfIntersecting, perimeter, polygonArea } from '../core/geometry';
 import type { Nutzungsgruppe, Raumumschliessung, Shape, WoflKategorie } from '../core/model';
 import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflFaktor } from '../core/norms';
-import { openImageFile } from '../platform/files';
 import { mapShape, mapStorey, useActiveStorey, useEditor, useSelectedShape } from '../store/store';
+import { BackgroundPanel } from './BackgroundPanel';
 import { Field, NumberField, TextField } from './fields';
 
 /** Rechte Seitenleiste: Eigenschaften der Auswahl bzw. des Geschosses + Kurzauswertung. */
@@ -209,24 +209,6 @@ function StoreyProperties() {
   const storey = useActiveStorey();
   const st = useEditor.getState();
   const upd = (fn: Parameters<typeof mapStorey>[2]) => st.update((p) => mapStorey(p, storey.id, fn));
-  const bg = storey.background;
-
-  const loadImage = async () => {
-    try {
-      const img = await openImageFile();
-      if (!img) return;
-      // Startmaßstab: Bildbreite ≈ 20 m, danach mit "Plan kalibrieren" korrigieren
-      const mpp = 20 / img.width;
-      upd((s) => ({
-        ...s,
-        background: { dataUrl: img.dataUrl, name: img.name, widthPx: img.width, heightPx: img.height, x: 0, y: 0, metersPerPixel: mpp, opacity: 0.6, visible: true },
-      }));
-      st.requestFit();
-      st.setTool('calibrate');
-    } catch (e) {
-      alert(String(e));
-    }
-  };
 
   return (
     <section>
@@ -241,62 +223,7 @@ function StoreyProperties() {
       </div>
       <p className="muted small-text">Die Geschosshöhe (OK Rohfußboden bis OK Rohfußboden darüber bzw. OK Dachbelag) wird für den BRI verwendet.</p>
 
-      <h3>Hintergrundplan</h3>
-      {!bg && (
-        <>
-          <p className="muted small-text">Einen Grundriss als Bild (PNG/JPG) laden, kalibrieren und Flächen darauf nachzeichnen.</p>
-          <button onClick={loadImage}>Bild laden …</button>
-        </>
-      )}
-      {bg && (
-        <>
-          <p className="small-text">
-            {bg.name} ({bg.widthPx} × {bg.heightPx} px)
-          </p>
-          <div className="field-row">
-            <Field label="Maßstab [mm/px]">
-              <NumberField
-                value={bg.metersPerPixel * 1000}
-                digits={3}
-                min={0.0001}
-                onChange={(v) => v && upd((s) => ({ ...s, background: { ...bg, metersPerPixel: v / 1000 } }))}
-              />
-            </Field>
-            <Field label="Deckkraft">
-              <input
-                type="range"
-                min={0.05}
-                max={1}
-                step={0.05}
-                value={bg.opacity}
-                onChange={(e) => st.updateSilent((p) => mapStorey(p, storey.id, (s) => ({ ...s, background: { ...bg, opacity: Number(e.target.value) } })))}
-              />
-            </Field>
-          </div>
-          <div className="field-row">
-            <Field label="Versatz X [m]">
-              <NumberField value={bg.x} onChange={(v) => v !== undefined && upd((s) => ({ ...s, background: { ...bg, x: v } }))} />
-            </Field>
-            <Field label="Versatz Y [m]">
-              <NumberField value={bg.y} onChange={(v) => v !== undefined && upd((s) => ({ ...s, background: { ...bg, y: v } }))} />
-            </Field>
-          </div>
-          <div className="button-row">
-            <button className="small" onClick={() => st.setTool('calibrate')}>
-              Kalibrieren
-            </button>
-            <button className="small" onClick={() => upd((s) => ({ ...s, background: { ...bg, visible: !bg.visible } }))}>
-              {bg.visible ? 'Ausblenden' : 'Einblenden'}
-            </button>
-            <button className="small" onClick={loadImage}>
-              Ersetzen
-            </button>
-            <button className="small danger" onClick={() => upd((s) => ({ ...s, background: undefined }))}>
-              Entfernen
-            </button>
-          </div>
-        </>
-      )}
+      <BackgroundPanel storey={storey} />
     </section>
   );
 }

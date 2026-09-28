@@ -30,19 +30,60 @@ export async function saveTextFile(o: SaveOptions): Promise<boolean> {
     });
     return path != null;
   }
-  const blob = new Blob([o.contents], { type: o.mime });
+  downloadBlob(new Blob([o.contents], { type: o.mime }), o.defaultName);
+  return true;
+}
+
+export interface SaveBinaryOptions {
+  defaultName: string;
+  data: Uint8Array;
+  filterName: string;
+  extension: string;
+  mime: string;
+}
+
+/** Speichert Binärdaten (z. B. .xlsx). Liefert false, wenn der Benutzer abgebrochen hat. */
+export async function saveBinaryFile(o: SaveBinaryOptions): Promise<boolean> {
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const path = await invoke<string | null>('save_binary_file', {
+      defaultName: o.defaultName,
+      contentsBase64: bytesToBase64(o.data),
+      filterName: o.filterName,
+      extensions: [o.extension],
+    });
+    return path != null;
+  }
+  downloadBlob(new Blob([o.data as BlobPart], { type: o.mime }), o.defaultName);
+  return true;
+}
+
+function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = o.defaultName;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return true;
 }
 
-function pickFile(accept: string): Promise<File | null> {
+export function bytesToBase64(bytes: Uint8Array): string {
+  let s = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(s);
+}
+
+export function base64ToBytes(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+export function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -67,20 +108,20 @@ export async function openTextFile(accept: string): Promise<{ name: string; text
   return { name: f.name, text: await f.text() };
 }
 
-export async function openImageFile(): Promise<{ name: string; dataUrl: string; width: number; height: number } | null> {
-  const f = await pickFile('image/png,image/jpeg,image/webp,image/gif,image/bmp');
-  if (!f) return null;
-  const dataUrl = await new Promise<string>((resolve, reject) => {
+export function readAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result));
     r.onerror = () => reject(r.error);
-    r.readAsDataURL(f);
+    r.readAsDataURL(blob);
   });
-  const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+}
+
+export function imageSize(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
     img.onerror = () => reject(new Error('Bild konnte nicht gelesen werden.'));
     img.src = dataUrl;
   });
-  return { name: f.name, dataUrl, width, height };
 }

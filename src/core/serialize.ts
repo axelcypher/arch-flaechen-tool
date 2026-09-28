@@ -1,4 +1,4 @@
-import type { Nutzungsgruppe, Project, Shape, Storey, WoflKategorie } from './model';
+import type { Background, Nutzungsgruppe, Project, RasterBackground, Shape, Storey, VectorBackground, WoflKategorie } from './model';
 import { createProject, newId } from './model';
 import { NUTZUNGSGRUPPEN, WOFL_KATEGORIEN } from './norms';
 
@@ -49,9 +49,8 @@ function normalizeStorey(s: Record<string, unknown>): Storey {
     hoehe: num(s.hoehe, 3),
     shapes,
   };
-  if (isObj(s.background) && typeof s.background.dataUrl === 'string') {
-    storey.background = s.background as unknown as Storey['background'];
-  }
+  const bg = normalizeBackground(s.background);
+  if (bg) storey.background = bg;
   return storey;
 }
 
@@ -87,6 +86,35 @@ function normalizeShape(s: Record<string, unknown>): Shape | null {
     };
   }
   return null;
+}
+
+function normalizeBackground(b: unknown): Background | undefined {
+  if (!isObj(b)) return undefined;
+  const base = { name: str(b.name, 'Plan'), x: num(b.x, 0), y: num(b.y, 0), opacity: num(b.opacity, 0.6), visible: b.visible !== false };
+  // Version 0.1: Rasterbilder ohne "type"
+  if ((b.type === 'raster' || b.type === undefined) && typeof b.dataUrl === 'string') {
+    const r: RasterBackground = {
+      ...base,
+      type: 'raster',
+      dataUrl: b.dataUrl,
+      widthPx: num(b.widthPx, 1),
+      heightPx: num(b.heightPx, 1),
+      metersPerPixel: num(b.metersPerPixel, 0.01),
+    };
+    if (isObj(b.pdf)) r.pdf = { page: num(b.pdf.page, 1), metersPerPixelAt1: num(b.pdf.metersPerPixelAt1, 0) };
+    return r;
+  }
+  if (b.type === 'vector' && Array.isArray(b.polylines) && Array.isArray(b.layers)) {
+    return {
+      ...base,
+      type: 'vector',
+      scale: num(b.scale, 1),
+      layers: b.layers.filter(isObj).map((l) => ({ name: str(l.name, '0'), color: str(l.color, '#333333'), visible: l.visible !== false })),
+      polylines: b.polylines as VectorBackground['polylines'],
+      texts: Array.isArray(b.texts) ? (b.texts as VectorBackground['texts']) : [],
+    };
+  }
+  return undefined;
 }
 
 function oneOf<T extends string>(v: unknown, allowed: readonly T[], d: T): T {

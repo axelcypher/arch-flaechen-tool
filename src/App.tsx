@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Canvas } from './components/Canvas';
+import { ExcelDialog } from './components/ExcelDialog';
 import { Properties } from './components/Properties';
 import { Report } from './components/Report';
 import { Sidebar } from './components/Sidebar';
@@ -8,6 +9,7 @@ import { useEditor } from './store/store';
 
 export function App() {
   const reportOpen = useEditor((s) => s.reportOpen);
+  const excelOpen = useEditor((s) => s.excelOpen);
   const name = useEditor((s) => s.project.name);
   const dirty = useEditor((s) => s.dirty);
 
@@ -34,6 +36,7 @@ export function App() {
         <Properties />
       </div>
       {reportOpen && <Report />}
+      {excelOpen && <ExcelDialog />}
     </div>
   );
 }

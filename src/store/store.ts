@@ -4,7 +4,18 @@ import type { Project, Shape, ShapeKind, Storey } from '../core/model';
 import { createProject, createStorey, newId } from '../core/model';
 import { parseProject } from '../core/serialize';
 
-export type Tool = 'select' | 'polygon' | 'rect' | 'measure' | 'calibrate';
+export type Tool = 'select' | 'polygon' | 'rect' | 'detect' | 'measure' | 'calibrate';
+
+export interface DetectSettings {
+  /** größte zu schließende Öffnung in m (Türbreite) */
+  gap: number;
+  /** Bögen/Kreise aus DXF ignorieren (Türaufschläge) */
+  skipArcs: boolean;
+  /** Helligkeitsschwelle 0–255 für Rasterpläne */
+  threshold: number;
+  /** dünne Linien in Rasterplänen (Türaufschläge, Möbel) ignorieren, sofern der Raum geschlossen bleibt */
+  ignoreThin: boolean;
+}
 
 export interface ViewOptions {
   showOutlines: boolean;
@@ -33,6 +44,8 @@ interface EditorState {
   /** Zähler, um der Zeichenfläche "Zoom auf alles" zu signalisieren */
   fitRequest: number;
   reportOpen: boolean;
+  excelOpen: boolean;
+  detect: DetectSettings;
 
   /** Änderung mit Undo-Schritt */
   update: (fn: (p: Project) => Project) => void;
@@ -53,6 +66,8 @@ interface EditorState {
   setView: (v: Partial<ViewOptions>) => void;
   requestFit: () => void;
   setReportOpen: (open: boolean) => void;
+  setExcelOpen: (open: boolean) => void;
+  setDetect: (d: Partial<DetectSettings>) => void;
 }
 
 export const useEditor = create<EditorState>((set, get) => {
@@ -77,6 +92,8 @@ export const useEditor = create<EditorState>((set, get) => {
     },
     fitRequest: 1,
     reportOpen: false,
+    excelOpen: false,
+    detect: loadDetectSettings(),
 
     update: (fn) => {
       const { project, past } = get();
@@ -128,6 +145,16 @@ export const useEditor = create<EditorState>((set, get) => {
     setView: (v) => set({ view: { ...get().view, ...v } }),
     requestFit: () => set({ fitRequest: get().fitRequest + 1 }),
     setReportOpen: (open) => set({ reportOpen: open }),
+    setExcelOpen: (open) => set({ excelOpen: open }),
+    setDetect: (d) => {
+      const detect = { ...get().detect, ...d };
+      set({ detect });
+      try {
+        localStorage.setItem(DETECT_KEY, JSON.stringify(detect));
+      } catch {
+        // ignorieren
+      }
+    },
   };
 });
 
@@ -210,16 +237,76 @@ export function nextRoomNumber(p: Project, storey: Storey): string {
   return `${Math.max(0, idx)}.${String(rooms + 1).padStart(2, '0')}`;
 }
 
-/* ---------- Autosave (lokal im Browser bzw. WebView) ---------- */
+/* ---------- Einstellungen & Autosave ---------- */
+
+const DETECT_KEY = 'arch-flaechen-tool:detect';
+
+function loadDetectSettings(): DetectSettings {
+  const d: DetectSettings = { gap: 1.1, skipArcs: true, threshold: 200, ignoreThin: true };
+  try {
+    return { ...d, ...JSON.parse(localStorage.getItem(DETECT_KEY) ?? '{}') };
+  } catch {
+    return d;
+  }
+}
+
+/*
+ * Autosave in IndexedDB (deutlich mehr Platz als localStorage – wichtig bei Planbildern).
+ * Beim Start wird der letzte Stand asynchron geladen, solange noch nichts bearbeitet wurde.
+ */
+
+const DB_NAME = 'arch-flaechen-tool';
+const STORE = 'autosave';
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key: string): Promise<string | undefined> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+    req.onsuccess = () => resolve(req.result as string | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSet(key: string, value: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
 
 function loadAutosave(): Project | null {
+  // Altbestand aus localStorage (Version 0.1) – wird beim nächsten Speichern nach IndexedDB übernommen
   try {
     const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return null;
-    return parseProject(raw);
+    return raw ? parseProject(raw) : null;
   } catch {
     return null;
   }
+}
+
+if (typeof indexedDB !== 'undefined') {
+  idbGet(AUTOSAVE_KEY)
+    .then((raw) => {
+      const st = useEditor.getState();
+      if (!raw || st.past.length || st.dirty) return;
+      const p = parseProject(raw);
+      st.loadProject(p);
+    })
+    .catch(() => {
+      // kein Autosave vorhanden oder nicht lesbar
+    });
 }
 
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -227,10 +314,17 @@ useEditor.subscribe((s, prev) => {
   if (s.project === prev.project) return;
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(s.project));
-    } catch {
-      // Speicher voll (z. B. große Hintergrundbilder) – Autosave ist nur ein Komfortmerkmal
-    }
-  }, 500);
+    const json = JSON.stringify(s.project);
+    idbSet(AUTOSAVE_KEY, json)
+      .then(() => {
+        try {
+          localStorage.removeItem(AUTOSAVE_KEY);
+        } catch {
+          // ignorieren
+        }
+      })
+      .catch(() => {
+        // Autosave ist nur ein Komfortmerkmal
+      });
+  }, 600);
 });
