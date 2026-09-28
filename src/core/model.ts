@@ -115,6 +115,8 @@ export interface VectorBackground extends BackgroundBase {
   type: 'vector';
   /** Meter je DXF-Zeichnungseinheit (mm → 0,001) */
   scale: number;
+  /** Herkunft: DXF-Datei oder Geschossschnitt aus einem IFC-Modell */
+  source?: 'dxf' | 'ifc';
   layers: DxfLayer[];
   polylines: DxfPolyline[];
   texts: DxfText[];

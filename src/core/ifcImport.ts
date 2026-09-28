@@ -3,8 +3,9 @@ import type { Point } from './geometry';
 import { polygonArea, signedArea } from './geometry';
 import { clipHalfPlane } from './roof';
 import type { IfcExtract, IfcMeshPart } from './ifcData';
-import type { Nutzungsgruppe, OutlineShape, Storey } from './model';
-import { createOutline, createRoom, createStorey } from './model';
+import type { DxfPolyline, Nutzungsgruppe, OutlineShape, Storey, VectorBackground } from './model';
+import { createOutline, createProject, createRoom, createStorey } from './model';
+import { modellRoofParams } from './calc';
 import type { DachModell } from './roofMesh';
 import { meshRoofStats } from './roofMesh';
 import { SegmentGrid } from './spatial';
@@ -20,6 +21,8 @@ export interface IfcImportOptions {
   roof: boolean;
   /** alle Räume als Wohnfläche (100 %) anrechnen, Wohnung = Geschossname */
   wohnflaeche: boolean;
+  /** Geschossschnitt als Vektorplan hinterlegen (Schnitthöhe über Fußboden in m, 0/undefiniert = aus) */
+  planSchnitthoehe?: number;
 }
 
 export interface IfcImportResult {
@@ -72,6 +75,20 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
     report.push('Keine Geschosse (IfcBuildingStorey) gefunden – alles wurde einem Geschoss zugeordnet.');
   }
   const storeyFor = (i: number) => storeyByIfcIndex.get(i) ?? storeys[0];
+
+  // Geschossschnitt als hinterlegter Plan
+  if (o.planSchnitthoehe && o.planSchnitthoehe > 0) {
+    let n = 0;
+    for (const st of storeys) {
+      const cut = (st.elevation ?? 0) + o.planSchnitthoehe;
+      const bg = sectionPlan(x.elements, cut, `IFC-Schnitt +${o.planSchnitthoehe.toFixed(2).replace('.', ',')} m`);
+      if (bg) {
+        st.background = bg;
+        n++;
+      }
+    }
+    report.push(`${n} Geschossschnitte (${o.planSchnitthoehe.toFixed(2).replace('.', ',')} m über Fußboden) als Plan hinterlegt – Fang und „Erkennen“ arbeiten darauf.`);
+  }
 
   // Räume
   if (o.rooms) {
@@ -135,16 +152,26 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
     const tris = upwardTriangles(roofParts);
     if (tris.length) {
       dachModell = { name: 'IFC-Dach', triangles: tris };
-      storeys.forEach((st, k) => {
-        const top = k === storeys.length - 1;
+      const tmp = createProject();
+      tmp.storeys = storeys;
+      tmp.dachModell = dachModell;
+      storeys.forEach((st) => {
         for (const s of st.shapes) {
           if (s.kind !== 'outline') continue;
-          const m = meshRoofStats(dachModell!, s.points, st.elevation ?? 0, st.hoehe, top ? undefined : st.hoehe);
+          const probe: OutlineShape = { ...s, dach: { typ: 'modell', traufhoehe: st.hoehe, neigung: 0 } };
+          const r = modellRoofParams(tmp, st, probe);
+          const m = meshRoofStats(dachModell!, s.points, r.floorZ, st.hoehe, r.cap);
           const full = polygonArea(s.points) * st.hoehe;
-          // nur dort, wo das Dach den Körper tatsächlich begrenzt
-          if (m.abdeckung > 0.02 && (top || m.volumen < full - 0.01)) s.dach = { typ: 'modell', traufhoehe: st.hoehe, neigung: 0, maxHoehe: top ? undefined : st.hoehe };
+          // nur dort, wo das Dach den Körper tatsächlich begrenzt oder darüber kein Geschoss mit BGF liegt
+          if (m.abdeckung > 0.02 && Math.abs(m.volumen - full) > 0.01) s.dach = probe.dach;
         }
       });
+      // Geschosse ohne BGF (z. B. Spitzboden/Dachspitze als eigenes Geschoss)
+      for (const st of storeys) {
+        if (!st.shapes.some((s) => s.kind === 'outline')) {
+          report.push(`${st.name}: ohne BGF-Umriss – der Rauminhalt darüber (z. B. Dachspitze) wird dem Geschoss darunter bis zur Dachhaut zugerechnet.`);
+        }
+      }
       report.push(`Dach aus ${roofParts.length} Dachbauteilen übernommen (BRI bis zur Dachhaut).`);
     } else report.push('Keine Dachbauteile (IfcRoof, IfcSlab.ROOF) gefunden – Dachform bei Bedarf manuell wählen.');
   }
@@ -412,3 +439,123 @@ function round(v: number, digits: number) {
   return Math.round(v * f) / f + 0;
 }
 
+
+/* ---------- Geschossschnitt als Vektorplan ---------- */
+
+const SECTION_LAYERS: { name: string; color: string; visible: boolean; match: (e: IfcMeshPart) => boolean }[] = [
+  { name: 'Wände', color: '#1f2328', visible: true, match: (e) => e.type.startsWith('IFCWALL') || e.type === 'IFCCURTAINWALL' || e.parentType === 'IFCCURTAINWALL' },
+  { name: 'Stützen/Träger', color: '#1f2328', visible: true, match: (e) => e.type === 'IFCCOLUMN' || e.type === 'IFCBEAM' },
+  { name: 'Fenster', color: '#1f6fb2', visible: true, match: (e) => e.type === 'IFCWINDOW' },
+  { name: 'Türen', color: '#9a5a17', visible: true, match: (e) => e.type === 'IFCDOOR' },
+  { name: 'Treppen/Geländer', color: '#5b6068', visible: true, match: (e) => e.type.startsWith('IFCSTAIR') || e.type.startsWith('IFCRAMP') || e.type === 'IFCRAILING' },
+  { name: 'Decken/Dach', color: '#8a8f99', visible: true, match: (e) => ['IFCSLAB', 'IFCROOF', 'IFCCOVERING', 'IFCMEMBER', 'IFCPLATE'].includes(e.type) },
+  { name: 'Möblierung', color: '#a0a6ad', visible: false, match: (e) => e.type.startsWith('IFCFURNISHING') || e.type === 'IFCFURNITURE' },
+  { name: 'Sonstiges', color: '#6b7280', visible: true, match: () => true },
+];
+
+/**
+ * Horizontalschnitt durch das Modell auf absoluter Höhe cutZ – ergibt einen Grundriss
+ * (Wände, Öffnungen, Treppen …) als Vektorplan in Metern, deckungsgleich mit den Projektkoordinaten.
+ */
+export function sectionPlan(elements: IfcMeshPart[], cutZ: number, name: string): VectorBackground | null {
+  const segsByLayer = SECTION_LAYERS.map(() => [] as number[]);
+  for (const e of elements) {
+    if (e.type === 'IFCSITE') continue;
+    const li = SECTION_LAYERS.findIndex((l) => l.match(e));
+    const out = segsByLayer[li];
+    const t = e.tris;
+    for (let i = 0; i + 8 < t.length; i += 9) {
+      const z0 = t[i + 2] - cutZ;
+      const z1 = t[i + 5] - cutZ;
+      const z2 = t[i + 8] - cutZ;
+      if ((z0 > 0 && z1 > 0 && z2 > 0) || (z0 < 0 && z1 < 0 && z2 < 0)) continue;
+      const pts: number[] = [];
+      const edge = (a: number, za: number, b: number, zb: number) => {
+        if ((za < 0 && zb >= 0) || (za >= 0 && zb < 0)) {
+          const f = za / (za - zb);
+          pts.push(t[a] + (t[b] - t[a]) * f, t[a + 1] + (t[b + 1] - t[a + 1]) * f);
+        }
+      };
+      edge(i, z0, i + 3, z1);
+      edge(i + 3, z1, i + 6, z2);
+      edge(i + 6, z2, i, z0);
+      if (pts.length === 4 && Math.hypot(pts[2] - pts[0], pts[3] - pts[1]) > 1e-4) out.push(...pts);
+    }
+  }
+  const polylines: DxfPolyline[] = [];
+  segsByLayer.forEach((segs, layer) => {
+    for (const pl of chainSegments(segs)) polylines.push({ layer, pts: pl.pts, closed: pl.closed });
+  });
+  if (!polylines.length) return null;
+  const used = new Set(polylines.map((p) => p.layer));
+  // nur belegte Layer behalten (Indizes neu vergeben)
+  const map = new Map<number, number>();
+  const layers = SECTION_LAYERS.filter((_, i) => used.has(i)).map((l, k) => {
+    map.set(SECTION_LAYERS.indexOf(l), k);
+    return { name: l.name, color: l.color, visible: l.visible };
+  });
+  for (const p of polylines) p.layer = map.get(p.layer)!;
+  return { type: 'vector', source: 'ifc', name, x: 0, y: 0, scale: 1, opacity: 0.85, visible: true, layers, polylines, texts: [] };
+}
+
+/** Segmente mit gemeinsamen Endpunkten zu Linienzügen verbinden, kollineare Zwischenpunkte entfernen */
+export function chainSegments(segs: number[]): { pts: number[]; closed: boolean }[] {
+  const key = (x: number, y: number) => `${Math.round(x * 1e4)},${Math.round(y * 1e4)}`;
+  const n = segs.length / 4;
+  const seen = new Set<string>();
+  const ends = new Map<string, number[]>();
+  const valid: boolean[] = [];
+  for (let i = 0; i < n; i++) {
+    const ka = key(segs[i * 4], segs[i * 4 + 1]);
+    const kb = key(segs[i * 4 + 2], segs[i * 4 + 3]);
+    const id = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+    valid[i] = ka !== kb && !seen.has(id);
+    if (!valid[i]) continue;
+    seen.add(id);
+    for (const k of [ka, kb]) {
+      if (!ends.has(k)) ends.set(k, []);
+      ends.get(k)!.push(i);
+    }
+  }
+  const used = new Uint8Array(n);
+  const out: { pts: number[]; closed: boolean }[] = [];
+  const endpoint = (i: number, first: boolean) => (first ? [segs[i * 4], segs[i * 4 + 1]] : [segs[i * 4 + 2], segs[i * 4 + 3]]);
+  for (let s = 0; s < n; s++) {
+    if (!valid[s] || used[s]) continue;
+    used[s] = 1;
+    const line: number[][] = [endpoint(s, true), endpoint(s, false)];
+    // in beide Richtungen verlängern
+    for (const forward of [true, false]) {
+      for (let guard = 0; guard < n; guard++) {
+        const tip = forward ? line[line.length - 1] : line[0];
+        const cand = ends.get(key(tip[0], tip[1]))?.find((j) => !used[j]);
+        if (cand === undefined) break;
+        used[cand] = 1;
+        const a = endpoint(cand, true);
+        const b = endpoint(cand, false);
+        const next = key(a[0], a[1]) === key(tip[0], tip[1]) ? b : a;
+        if (forward) line.push(next);
+        else line.unshift(next);
+      }
+    }
+    let closed = false;
+    if (line.length > 3 && key(line[0][0], line[0][1]) === key(line[line.length - 1][0], line[line.length - 1][1])) {
+      line.pop();
+      closed = true;
+    }
+    // kollineare Punkte entfernen
+    const pts: number[][] = [];
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i];
+      const prev = pts[pts.length - 1];
+      const nxt = line[i + 1];
+      if (prev && nxt && (!closed || i > 0)) {
+        const cross = (p[0] - prev[0]) * (nxt[1] - p[1]) - (p[1] - prev[1]) * (nxt[0] - p[0]);
+        if (Math.abs(cross) < 1e-7) continue;
+      }
+      pts.push(p);
+    }
+    out.push({ pts: pts.flat().map((v) => Math.round(v * 1e4) / 1e4 + 0), closed });
+  }
+  return out;
+}

@@ -794,6 +794,12 @@ select:focus {
   margin: 5px 0;
 }
 
+.inline-num {
+  display: inline-block;
+  width: 64px;
+  margin: 0 4px;
+}
+
 .ifc-storeys,
 .ifc-report {
   margin: 4px 0 10px;

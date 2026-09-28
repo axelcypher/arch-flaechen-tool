@@ -1,4 +1,5 @@
-import { polygonArea } from './geometry';
+import type { Point } from './geometry';
+import { pointInPolygon, polygonArea } from './geometry';
 import type { Nutzungsgruppe, OutlineShape, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
 import { roomArea, storeyElevations } from './model';
 import { roofStats } from './roof';
@@ -84,15 +85,42 @@ function emptyTotals(): AreaTotals {
   return { bgf: rs(), bri: rs(), nutzung: emptyNutzung(), nuf: rs(), tf: rs(), vf: rs(), nrf: rs(), kgf: rs(), wofl: 0 };
 }
 
+/**
+ * Dach aus Modell: Fußbodenhöhe und Höhenbegrenzung eines Umrisses.
+ * Ohne feste Begrenzung (maxHoehe) reicht der Körper bis zum Fußboden des nächsten Geschosses –
+ * aber nur dort, wo dieses Geschoss BGF hat (Umriss, abzüglich Abzugsflächen). Sonst bis zur Dachhaut:
+ * so wird z. B. die Dachspitze über einem DG erfasst, auch wenn sie als eigenes Geschoss ohne BGF modelliert ist.
+ */
+export function modellRoofParams(project: Project, storey: Storey, s: OutlineShape): { floorZ: number; cap: number | ((p: Point) => number) } {
+  const elev = storeyElevations(project);
+  const idx = project.storeys.indexOf(storey);
+  const floorZ = elev[idx] ?? 0;
+  if (s.dach?.maxHoehe !== undefined) return { floorZ, cap: s.dach.maxHoehe };
+  // nächstes Geschoss darüber (nach Höhe, nicht nach Listenreihenfolge)
+  let above = -1;
+  elev.forEach((e, i) => {
+    if (e > floorZ + 1e-6 && (above < 0 || e < elev[above])) above = i;
+  });
+  if (above < 0) return { floorZ, cap: Infinity };
+  const upper = project.storeys[above].shapes.filter((x) => x.kind === 'outline');
+  const plus = upper.filter((x) => !x.subtract).map((x) => x.points);
+  const minus = upper.filter((x) => x.subtract).map((x) => x.points);
+  if (!plus.length) return { floorZ, cap: Infinity };
+  const hUp = elev[above] - floorZ;
+  return {
+    floorZ,
+    cap: (p: Point) => (plus.some((q) => pointInPolygon(p, q)) && !minus.some((q) => pointInPolygon(p, q)) ? hUp : Infinity),
+  };
+}
+
 /** Rauminhalt eines BGF-Umrisses (ohne Vorzeichen): Fläche × Höhe bzw. bis zur Dachhaut */
 export function outlineVolume(s: OutlineShape, storey: Storey, project: Project): number {
   const h = s.hoehe ?? storey.hoehe;
   if (!s.dach) return polygonArea(s.points) * h;
   if (s.dach.typ === 'modell') {
     if (!project.dachModell) return polygonArea(s.points) * h;
-    const idx = project.storeys.indexOf(storey);
-    const floorZ = storeyElevations(project)[idx] ?? 0;
-    return meshRoofStats(project.dachModell, s.points, floorZ, h, s.dach.maxHoehe).volumen;
+    const r = modellRoofParams(project, storey, s);
+    return meshRoofStats(project.dachModell, s.points, r.floorZ, h, r.cap).volumen;
   }
   return Math.abs(roofStats(s.dach, s.points).volumen);
 }

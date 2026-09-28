@@ -126,6 +126,7 @@ function normalizeBackground(b: unknown): Background | undefined {
     return {
       ...base,
       type: 'vector',
+      source: b.source === 'ifc' ? 'ifc' : undefined,
       scale: num(b.scale, 1),
       layers: b.layers.filter(isObj).map((l) => ({ name: str(l.name, '0'), color: str(l.color, '#333333'), visible: l.visible !== false })),
       polylines: b.polylines as VectorBackground['polylines'],
