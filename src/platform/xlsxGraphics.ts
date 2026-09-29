@@ -103,7 +103,7 @@ function contentTypes(files: Files) {
   return { xml, overrides, defaults };
 }
 
-export function restoreTemplateGraphics(template: Uint8Array, output: Uint8Array): Uint8Array {
+export function restoreTemplateGraphics(template: Uint8Array, output: Uint8Array, replaceText?: (text: string) => string): Uint8Array {
   let tpl: Files;
   let out: Files;
   try {
@@ -152,7 +152,7 @@ export function restoreTemplateGraphics(template: Uint8Array, output: Uint8Array
       const dst = `${dir}/tpl${++counter}_${file}`;
       copied.set(src, dst);
       if (!tpl[src]) return dst;
-      out[dst] = tpl[src];
+      out[dst] = replaceText && /^xl\/drawings\/[^/]+\.xml$/.test(src) ? strToU8(replaceDrawingText(strFromU8(tpl[src]), replaceText)) : tpl[src];
       const ext = file.split('.').pop()!.toLowerCase();
       const ov = tplCT.overrides.get(src);
       if (ov) addOverrides.set(dst, ov);
@@ -232,4 +232,25 @@ function removePart(files: Files, path: string) {
   // Content-Type-Override des entfernten Teils bleibt harmlos stehen; Excel ignoriert ihn nicht immer → entfernen
   const ct = strFromU8(files['[Content_Types].xml']);
   files['[Content_Types].xml'] = strToU8(ct.replace(new RegExp(`<Override PartName="/${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*/>`), ''));
+}
+
+/**
+ * Platzhalter in Textfeldern/Formen einer Zeichnung ersetzen. Excel teilt Text oft in mehrere Läufe
+ * (<a:r>) auf; enthält ein Absatz einen Platzhalter, wird sein Text im ersten Lauf zusammengeführt.
+ */
+function replaceDrawingText(xml: string, replaceText: (t: string) => string): string {
+  return xml.replace(/<a:p>[\s\S]*?<\/a:p>|<a:p\s[\s\S]*?<\/a:p>/g, (para) => {
+    const runs = [...para.matchAll(/(<a:t(?:\s[^>]*)?>)([\s\S]*?)(<\/a:t>)/g)];
+    if (!runs.length) return para;
+    const text = runs.map((r) => decodeXml(r[2])).join('');
+    if (!text.includes('{{')) return para;
+    const repl = replaceText(text);
+    if (repl === text) return para;
+    let i = 0;
+    return para.replace(/(<a:t(?:\s[^>]*)?>)([\s\S]*?)(<\/a:t>)/g, (_m, a: string, _b: string, c: string) => `${a}${i++ === 0 ? encodeXml(repl) : ''}${c}`);
+  });
+}
+
+function encodeXml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

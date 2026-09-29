@@ -23,7 +23,7 @@ async function template(): Promise<Uint8Array> {
   const sheet = 'xl/worksheets/sheet1.xml';
   files[sheet] = strToU8(
     strFromU8(files[sheet])
-      .replace('<headerFooter>', '<headerFooter><oddHeader>&amp;L&amp;G</oddHeader>')
+      .replace('<headerFooter>', '<headerFooter><oddHeader>&amp;L&amp;G&amp;R{{projekt.code}} {{projekt.name}}</oddHeader>')
       .replace('</worksheet>', '<legacyDrawingHF r:id="rIdHF"/></worksheet>'),
   );
   const rels = 'xl/worksheets/_rels/sheet1.xml.rels';
@@ -43,7 +43,8 @@ async function template(): Promise<Uint8Array> {
 
 describe('Grafiken der Vorlage', () => {
   it('übernimmt Logo in Zellen und im Seitenkopf', async () => {
-    const p = createProject('Test');
+    const p = createProject('Test & Co');
+    p.meta.projektcode = '0815';
     const r = createRoom(rectPoints({ x: 0, y: 0 }, { x: 4, y: 5 }), '1', 'Wohnen');
     r.wofl = { kategorie: 'voll', wohnung: '' };
     p.storeys[0].shapes.push(r);
@@ -53,7 +54,7 @@ describe('Grafiken der Vorlage', () => {
     expect(sheet).toMatch(/<drawing r:id="[^"]+"\/>/);
     expect(sheet).toMatch(/<legacyDrawingHF r:id="[^"]+"\/>/);
     expect(sheet.indexOf('<drawing')).toBeLessThan(sheet.indexOf('<legacyDrawingHF'));
-    expect(sheet).toContain('&amp;L&amp;G');
+    expect(sheet).toContain('&amp;L&amp;G&amp;R0815 Test &amp;&amp; Co');
 
     const rels = strFromU8(out['xl/worksheets/_rels/sheet1.xml.rels']);
     const hfTarget = /Target="([^"]*vmlDrawingHF1\.vml)"/.exec(rels)![1];

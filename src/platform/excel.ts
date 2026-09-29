@@ -1,7 +1,7 @@
 import type { Cell, Style, Workbook, Worksheet } from 'exceljs';
 import type { ProjectResult } from '../core/calc';
 import type { ExportContext, Value } from '../core/exportData';
-import { buildExportContext, PLACEHOLDER_DOCS } from '../core/exportData';
+import { buildExportContext, PLACEHOLDER_DOCS, resolveText } from '../core/exportData';
 import type { CellValue, TemplateRow } from '../core/template';
 import { expandTemplate } from '../core/template';
 import type { EvalValue } from '../core/formulaEval';
@@ -34,12 +34,30 @@ export async function exportWithTemplate(template: Uint8Array, project: Project,
     throw new Error(`Die Vorlage konnte nicht gelesen werden (nur .xlsx wird unterstützt): ${e instanceof Error ? e.message : String(e)}`);
   }
   const ctx = buildExportContext(project, result);
+  wb.eachSheet((ws) => fillHeaderFooter(ws, ctx));
   wb.eachSheet((ws) => fillSheet(ws, ctx));
   wb.eachSheet((ws) => writeFormulaResults(ws));
   // Excel soll alle Formeln beim Öffnen neu berechnen
   wb.calcProperties = { ...(wb.calcProperties ?? {}), fullCalcOnLoad: true };
   // Logos/Bilder der Vorlage (auch in Kopf-/Fußzeile) unverändert übernehmen
-  return restoreTemplateGraphics(template, new Uint8Array(await wb.xlsx.writeBuffer()));
+  // Textfelder in Zeichnungen erhalten ebenfalls ersetzte Platzhalter
+  return restoreTemplateGraphics(template, new Uint8Array(await wb.xlsx.writeBuffer()), (t) => String(resolveText(t, ctx)));
+}
+
+const HF_KEYS = ['oddHeader', 'oddFooter', 'evenHeader', 'evenFooter', 'firstHeader', 'firstFooter'] as const;
+
+/** Platzhalter in Kopf-/Fußzeilen ersetzen („&“ ist dort Steuerzeichen und wird verdoppelt) */
+function fillHeaderFooter(ws: Worksheet, ctx: ExportContext) {
+  const hf = ws.headerFooter as Record<string, unknown> | undefined;
+  if (!hf) return;
+  for (const k of HF_KEYS) {
+    const t = hf[k];
+    if (typeof t !== 'string' || !t.includes('{{')) continue;
+    hf[k] = t.replace(/\{\{[^{}]+\}\}/g, (m) => {
+      const v = resolveText(m, ctx);
+      return v === m ? m : (typeof v === 'number' ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : String(v)).replace(/&/g, '&&');
+    });
+  }
 }
 
 function formulaOf(cell: Cell): string | null {

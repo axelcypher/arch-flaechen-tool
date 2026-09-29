@@ -17,6 +17,9 @@ Wohnflächen, BGF, BRI (Rechenweg), Räume und einer Platzhalter-Übersicht.
 | `{{raum[wofl].name}}` | Wiederholung mit **Filter** |
 | `{{geschoss.name\|einmal}}` | Wert nur in der **ersten** Zeile einer Wiederholung |
 
+Platzhalter für Einzelwerte funktionieren auch in **Kopf-/Fußzeilen** (Seite einrichten) und in
+**Textfeldern/Formen**.
+
 Steht in einer Zelle nur ein Platzhalter, wird der Wert als **Zahl** eingetragen – das Zahlenformat der
 Vorlagenzelle (z. B. `#.##0,00 "m²"`) bleibt erhalten und Excel rechnet damit weiter. Unbekannte
 Platzhalter bleiben sichtbar stehen, damit Tippfehler auffallen.

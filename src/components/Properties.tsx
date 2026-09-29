@@ -222,6 +222,7 @@ function ShapeProperties({ shape }: { shape: Shape }) {
 
 function StoreyProperties() {
   const storey = useActiveStorey();
+  const project = useEditor((s) => s.project);
   const st = useEditor.getState();
   const upd = (fn: Parameters<typeof mapStorey>[2]) => st.update((p) => mapStorey(p, storey.id, fn));
 
@@ -237,6 +238,12 @@ function StoreyProperties() {
         </Field>
       </div>
       <p className="muted small-text">Die Geschosshöhe (OK Rohfußboden bis OK Rohfußboden darüber bzw. OK Dachbelag) wird für den BRI verwendet.</p>
+      {project.dachModell && (
+        <label className="toggle block" title="Ohne Haken reicht der Rauminhalt dort, wo darüber keine BGF liegt (z. B. Dachspitze als eigenes Geschoss), bis unter die Dachhaut.">
+          <input type="checkbox" checked={!!storey.geschosshoeheBegrenzt} onChange={(e) => upd((s) => ({ ...s, geschosshoeheBegrenzt: e.target.checked || undefined }))} />
+          BRI auf Geschosshöhe begrenzen (nicht bis unter die Dachhaut)
+        </label>
+      )}
 
       {storey.shapes.some((s) => s.kind === 'room') && (
         <div className="field">

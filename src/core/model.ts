@@ -134,6 +134,8 @@ export interface Storey {
   hoehe: number;
   /** Höhe OK Fußboden über ±0,00 in m; ohne Angabe Summe der Geschosshöhen darunter */
   elevation?: number;
+  /** Dach aus Modell: Rauminhalt höchstens bis zur Geschosshöhe (nicht bis unter die Dachhaut erweitern) */
+  geschosshoeheBegrenzt?: boolean;
   shapes: Shape[];
   background?: Background;
 }

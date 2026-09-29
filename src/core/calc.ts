@@ -99,6 +99,7 @@ export function modellRoofParams(project: Project, storey: Storey, s: OutlineSha
   const idx = project.storeys.indexOf(storey);
   const floorZ = elev[idx] ?? 0;
   if (s.dach?.maxHoehe !== undefined) return { floorZ, cap: s.dach.maxHoehe };
+  if (storey.geschosshoeheBegrenzt) return { floorZ, cap: s.hoehe ?? storey.hoehe };
   // nächstes Geschoss darüber (nach Höhe, nicht nach Listenreihenfolge)
   let above = -1;
   elev.forEach((e, i) => {

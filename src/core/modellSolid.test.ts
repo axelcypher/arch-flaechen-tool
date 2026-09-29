@@ -56,6 +56,14 @@ describe('Körper mit Dach aus dem Modell (3D)', () => {
     expect(outlineVolume(eg.shapes[0] as never, eg, p)).toBeCloseTo(10.014 * 8 * 3, 6);
   });
 
+  it('Geschoss auf Geschosshöhe begrenzt', () => {
+    const { p, og } = haus();
+    og.hoehe = 1;
+    expect(outlineVolume(og.shapes[0] as never, og, p)).toBeGreaterThan(160); // bis unter die Dachhaut
+    og.geschosshoeheBegrenzt = true;
+    expect(outlineVolume(og.shapes[0] as never, og, p)).toBeCloseTo(80, 3);
+  });
+
   it('oberstes Geschoss folgt der Dachhaut', () => {
     const { p, og } = haus();
     const f = modellSolidFaces(p, og, og.shapes[0] as never, 3);
