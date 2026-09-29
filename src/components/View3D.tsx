@@ -9,6 +9,7 @@ import { nutzungInfo } from '../core/norms';
 import type { Point3 } from '../core/roof';
 import { solidFaces } from '../core/roof';
 import { modellSolidFaces } from '../core/modellSolid';
+import { useTheme } from '../platform/theme';
 import { useEditor } from '../store/store';
 
 /**
@@ -37,6 +38,7 @@ export default function View3D() {
   } | null>(null);
 
   const result = useMemo(() => computeProject(project), [project]);
+  const dunkel = useTheme((s) => s.theme) === 'dunkel';
 
   // Grundgerüst einmalig anlegen
   useEffect(() => {
@@ -187,7 +189,7 @@ export default function View3D() {
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       const gsize = Math.ceil(Math.max(size.x, size.z) * 1.6 + 4);
-      const grid = new THREE.GridHelper(gsize, gsize, 0xc9ccd2, 0xe1e3e7);
+      const grid = dunkel ? new THREE.GridHelper(gsize, gsize, 0x4a505a, 0x30343c) : new THREE.GridHelper(gsize, gsize, 0xc9ccd2, 0xe1e3e7);
       grid.position.set(Math.round(center.x), Math.min(box.min.y, 0) - 0.01, Math.round(center.z));
       t.content.add(grid);
       if (!t.fitted) {
@@ -195,7 +197,12 @@ export default function View3D() {
         t.fitted = true;
       }
     }
-  }, [project, explode, showRooms, showIfc, onlyActive, activeStoreyId, selectedId, ifcModel]);
+  }, [project, explode, showRooms, showIfc, onlyActive, activeStoreyId, selectedId, ifcModel, dunkel]);
+
+  // Hintergrund passend zum Farbschema
+  useEffect(() => {
+    three.current?.renderer.setClearColor(dunkel ? 0x1a1d22 : 0xf4f5f7);
+  }, [dunkel]);
 
   const fit = () => {
     const t = three.current;

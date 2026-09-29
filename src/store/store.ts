@@ -3,6 +3,9 @@ import type { Point } from '../core/geometry';
 import type { Project, Shape, ShapeKind, Storey } from '../core/model';
 import { createProject, createStorey, newId } from '../core/model';
 import { parseProject, parseProjectData } from '../core/serialize';
+import { logger } from '../platform/log';
+
+const log = logger('autosave');
 
 export type Tool = 'select' | 'polygon' | 'rect' | 'detect' | 'measure' | 'calibrate';
 
@@ -333,9 +336,11 @@ if (typeof indexedDB !== 'undefined') {
       const p = typeof raw === 'string' ? parseProject(raw) : parseProjectData(raw);
       st.loadProject(p);
       void restoreIfcModel(p);
+      log.info('Zwischenstand wiederhergestellt', { name: p.name, geschosse: p.storeys.length });
     })
-    .catch(() => {
+    .catch((e) => {
       // kein Autosave vorhanden oder nicht lesbar
+      log.warn('Zwischenstand konnte nicht gelesen werden', e);
     });
 }
 
@@ -352,8 +357,9 @@ useEditor.subscribe((s, prev) => {
           // ignorieren
         }
       })
-      .catch(() => {
+      .catch((e) => {
         // Autosave ist nur ein Komfortmerkmal
+        log.warn('Zwischenspeichern fehlgeschlagen', e);
       });
   }, 600);
 });

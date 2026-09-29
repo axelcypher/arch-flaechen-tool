@@ -54,15 +54,37 @@ fn save_bytes(
         return Ok(None);
     };
     let path = file_path.into_path().map_err(|e| e.to_string())?;
-    std::fs::write(&path, contents).map_err(|e| format!("{}: {}", path.display(), e))?;
+    std::fs::write(&path, contents).map_err(|e| {
+        log::error!("Speichern fehlgeschlagen: {}: {}", path.display(), e);
+        format!("{}: {}", path.display(), e)
+    })?;
+    log::info!("Gespeichert: {} ({} Bytes)", path.display(), contents.len());
     Ok(Some(path.display().to_string()))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Protokoll: Konsole + Logdatei im App-Logordner (%LOCALAPPDATA%\<identifier>\logs)
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("flaechenrechner".into()),
+                    }),
+                ])
+                .level(log::LevelFilter::Debug)
+                .max_file_size(2_000_000)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![save_file, save_binary_file])
+        .setup(|app| {
+            log::info!("Flächenrechner {} gestartet", app.package_info().version);
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten der Anwendung");
 }

@@ -9,6 +9,9 @@ import type { PdfDocumentHandle } from '../platform/pdf';
 import { openPdf } from '../platform/pdf';
 import { mapStorey, useEditor } from '../store/store';
 import { Field, NumberField } from './fields';
+import { logger } from '../platform/log';
+
+const log = logger('plan');
 
 const ACCEPT = '.pdf,.dxf,image/png,image/jpeg,image/webp,image/gif,image/bmp';
 
@@ -65,6 +68,7 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
         afterLoad(true);
       }
     } catch (e) {
+      log.error('Plan konnte nicht geladen werden', e);
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
@@ -99,6 +103,7 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
       setPdf(null);
       afterLoad(!massstab);
     } catch (e) {
+      log.error('PDF konnte nicht gerendert werden', e);
       alert(`PDF konnte nicht gerendert werden: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(null);

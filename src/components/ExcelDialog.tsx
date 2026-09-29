@@ -5,6 +5,9 @@ import { addDatei } from '../core/model';
 import { pickFile, saveBinaryFile } from '../platform/files';
 import { aktuelleVorlage, removeGlobaleVorlage, setGlobaleVorlage } from '../platform/vorlage';
 import { useEditor } from '../store/store';
+import { logger } from '../platform/log';
+
+const log = logger('excel');
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -52,6 +55,7 @@ export function ExcelDialog() {
       const { buildSampleTemplate } = await import('../platform/excel');
       await saveBinaryFile({ defaultName: 'Flächen-Vorlage.xlsx', data: await buildSampleTemplate(), filterName: 'Excel-Arbeitsmappe', extension: 'xlsx', mime: XLSX_MIME });
     } catch (e) {
+      log.error('Muster-Vorlage fehlgeschlagen', e);
       setError(String(e));
     } finally {
       setBusy(false);
@@ -65,10 +69,13 @@ export function ExcelDialog() {
       const { exportDefault, exportWithTemplate } = await import('../platform/excel');
       const p = useEditor.getState().project;
       const result = computeProject(p);
+      const done = log.time(mode === 'template' && template ? `Export mit Vorlage „${template.name}“` : 'Export Standardlayout');
       const data = mode === 'template' && template ? await exportWithTemplate(template.daten, p, result) : await exportDefault(p, result);
+      done({ bytes: data.byteLength });
       const ok = await saveBinaryFile({ defaultName: `${safeFileName(p.name)} Flächen.xlsx`, data, filterName: 'Excel-Arbeitsmappe', extension: 'xlsx', mime: XLSX_MIME });
       if (ok) setOpen(false);
     } catch (e) {
+      log.error('Excel-Export fehlgeschlagen', e);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);

@@ -24,6 +24,9 @@ import { SegmentGrid } from '../core/spatial';
 import { loadImage, rasterEdgeRefiner, rasterMaskProvider } from '../platform/rasterMask';
 import { mapStorey, nextRoomNumber, setShapePoints, useActiveStorey, useEditor } from '../store/store';
 import { BackgroundLayer } from './BackgroundLayer';
+import { logger } from '../platform/log';
+
+const log = logger('erkennen');
 
 interface Viewport {
   /** Pixel pro Meter */
@@ -519,9 +522,15 @@ export function Canvas() {
       // dem Browser einen Frame für die Anzeige des Wartezustands lassen
       await new Promise((r) => requestAnimationFrame(() => r(null)));
       const res = detectRegion({ click, grids, rasterMask, refineEdge, gap: detect.gap, ignoreThinLines: detect.ignoreThin ? 0.05 : 0 });
-      if (!res.ok) setMessage(res.error);
-      else finishShape(res.points);
+      if (!res.ok) {
+        log.info(`Keine Fläche erkannt: ${res.error}`, { click, gap: detect.gap });
+        setMessage(res.error);
+      } else {
+        log.debug('Fläche erkannt', { click, punkte: res.points.length });
+        finishShape(res.points);
+      }
     } catch (e) {
+      log.error('Erkennung fehlgeschlagen', e);
       setMessage(`Erkennung fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
