@@ -16,8 +16,7 @@ import {
 import { fmt2, parseNum } from '../core/format';
 import { NumberField } from './fields';
 import type { Shape, Storey } from '../core/model';
-import { createFlaeche, createOutline, createRoom, shapeArea } from '../core/model';
-import { versiegelungInfo } from '../core/lageplan';
+import { createOutline, createRoom, shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import { bgWorldBounds, scaleAround, vectorSegmentGrid } from '../core/background';
 import { detectRegion } from '../core/detect';
@@ -154,7 +153,6 @@ export function Canvas() {
     const shapes: Shape[] = [];
     if (view.showOutlines) shapes.push(...storey.shapes.filter((s) => s.kind === 'outline'));
     if (view.showRooms) shapes.push(...storey.shapes.filter((s) => s.kind === 'room'));
-    shapes.push(...storey.shapes.filter((s) => s.kind === 'flaeche'));
     if (ghost) shapes.push(...ghost.shapes);
     return shapes;
   }, [storey, ghost, view.showOutlines, view.showRooms]);
@@ -246,10 +244,8 @@ export function Canvas() {
       setNumBuf('');
       if (clean.length < 3 || polygonArea(clean) < 1e-6) return;
       const st = storey;
-      // im Lageplan entstehen immer Lageplan-Flächen
-      const shape = st.lageplan
-        ? createFlaeche(clean)
-        : drawKind === 'outline'
+      const shape =
+        drawKind === 'outline'
           ? createOutline(clean, st.shapes.some((s) => s.kind === 'outline') ? 'BGF-Teilfläche' : 'BGF')
           : createRoom(clean, nextRoomNumber(project, st));
       update((p) => mapStorey(p, st.id, (s) => ({ ...s, shapes: [...s.shapes, shape] })));
@@ -669,7 +665,6 @@ export function Canvas() {
 
   const outlines = view.showOutlines ? storey.shapes.filter((s) => s.kind === 'outline') : [];
   const rooms = view.showRooms ? storey.shapes.filter((s) => s.kind === 'room') : [];
-  const flaechen = storey.shapes.filter((s) => s.kind === 'flaeche');
 
   // Beschriftungspunkte; BGF-Beschriftungen weichen sichtbaren Räumen aus
   const labelPoints = useMemo(() => {
@@ -691,15 +686,6 @@ export function Canvas() {
         strokeWidth: isSel ? 3 : 2,
       };
     }
-    if (s.kind === 'flaeche') {
-      return {
-        fill: versiegelungInfo(s.versiegelung).color,
-        fillOpacity: s.nachbar ? 0.15 : 0.45,
-        stroke: isSel ? 'var(--sel)' : s.nachbar ? '#9aa0a6' : '#5b6068',
-        strokeWidth: isSel ? 2.5 : 1,
-        strokeDasharray: s.nachbar ? '4 3' : undefined,
-      };
-    }
     const c = nutzungInfo(s.nutzung).color;
     return {
       fill: c,
@@ -718,7 +704,7 @@ export function Canvas() {
     const hPx = (b.maxY - b.minY) * vp.scale;
     if (wPx < 30 || hPx < 16) return null;
     const area = shapeArea(s) * (s.subtract ? -1 : 1);
-    const title = s.kind === 'room' ? [s.nummer, s.name].filter(Boolean).join(' ') : s.kind === 'flaeche' ? s.name : `${s.name} (${s.umschliessung})`;
+    const title = s.kind === 'room' ? [s.nummer, s.name].filter(Boolean).join(' ') : `${s.name} (${s.umschliessung})`;
     const showTitle = wPx > 70 && hPx > 34 && title;
     return (
       <text key={`l-${s.id}`} className="shape-label" x={lp.x} y={lp.y} textAnchor="middle">
@@ -769,7 +755,6 @@ export function Canvas() {
   const origin = draft.length ? draft[draft.length - 1] : null;
   const preview = cursor && draft.length ? cursor.p : null;
 
-  const kindLabel = storey.lageplan ? 'Lageplan-Fläche' : drawKind === 'outline' ? 'BGF-Umriss' : 'Raum';
   let hint = '';
   switch (tool) {
     case 'select':
@@ -778,15 +763,15 @@ export function Canvas() {
     case 'polygon':
       hint = draft.length
         ? 'Klicken: nächster Punkt · Zahl + Enter: Länge in Mausrichtung · dx;dy + Enter: relativ · Enter/Doppelklick/Startpunkt: schließen · ⇧ orthogonal'
-        : `Ersten Punkt setzen (${kindLabel})`;
+        : `Ersten Punkt setzen (${drawKind === 'outline' ? 'BGF-Umriss' : 'Raum'})`;
       break;
     case 'rect':
-      hint = draft.length ? 'Gegenecke klicken oder Maße eingeben, z. B. 4,5x3,2 + Enter' : `Erste Ecke setzen (${kindLabel})`;
+      hint = draft.length ? 'Gegenecke klicken oder Maße eingeben, z. B. 4,5x3,2 + Enter' : `Erste Ecke setzen (${drawKind === 'outline' ? 'BGF-Umriss' : 'Raum'})`;
       break;
     case 'detect':
       hint = busy
         ? 'Erkenne Fläche …'
-        : `In einen umschlossenen Bereich klicken – die Fläche wird als ${kindLabel} angelegt (Türöffnungen bis ${fmt2(detect.gap)} m werden geschlossen)`;
+        : `In einen umschlossenen Bereich klicken – die Fläche wird als ${drawKind === 'outline' ? 'BGF-Umriss' : 'Raum'} angelegt (Türöffnungen bis ${fmt2(detect.gap)} m werden geschlossen)`;
       break;
     case 'measure':
       hint = 'Zwei Punkte klicken, um einen Abstand zu messen';
@@ -830,7 +815,7 @@ export function Canvas() {
           ghost.shapes.map((s) => <path key={`g-${s.id}`} d={pathOf(s.points)} className="ghost" />)}
 
         <g style={{ pointerEvents: tool === 'select' && !spaceDown ? 'visiblePainted' : 'none' }}>
-          {[...flaechen, ...outlines, ...rooms].map((s) => (
+          {[...outlines, ...rooms].map((s) => (
             <path
               key={s.id}
               d={pathOf(s.points)}
@@ -842,7 +827,7 @@ export function Canvas() {
             />
           ))}
         </g>
-        <g style={{ pointerEvents: 'none' }}>{[...flaechen, ...outlines, ...rooms].map(renderLabel)}</g>
+        <g style={{ pointerEvents: 'none' }}>{[...outlines, ...rooms].map(renderLabel)}</g>
 
         {selected && tool === 'select' && (
           <g>

@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import { computeProject } from '../core/calc';
 import { rectPoints } from '../core/geometry';
-import { createFlaeche, createOutline, createProject, createRoom, createStorey } from '../core/model';
+import { createOutline, createProject, createRoom, createStorey } from '../core/model';
 import { defaultDach } from '../core/roof';
 import { buildSampleTemplate, exportDefault, exportWithTemplate } from './excel';
 
@@ -178,32 +178,5 @@ describe('Excel-Export mit Vorlage', () => {
     const bri = wb.getWorksheet('BRI-Rechenweg')!;
     expect(bri.getCell('C6').value).toBe('Quader');
     expect(formula(bri, 'J6')).toBe('D6*G6*H6*I6');
-  });
-});
-
-describe('Muster-Vorlage: GRZ/GFZ', () => {
-  it('füllt Kennzahlen, Geschossfläche, Bilanz und Lageplan-Flächen', async () => {
-    const p = createProject('GRZ');
-    const eg = p.storeys[0];
-    eg.shapes.push(createOutline(rectPoints({ x: 0, y: 0 }, { x: 10, y: 10 })));
-    const og = createStorey('OG', 3);
-    og.shapes.push(createOutline(rectPoints({ x: 0, y: 0 }, { x: 10, y: 10 })));
-    const lp = { ...createStorey('Lageplan', 0), lageplan: true, elevation: 0 };
-    lp.shapes.push({ ...createFlaeche(rectPoints({ x: 10, y: 0 }, { x: 13, y: 10 }), 'Zufahrt'), nutzung: 'zufahrt', versiegelung: 'teil' });
-    p.storeys = [lp, eg, og];
-    p.meta.grundstueck.flaeche = 500;
-    p.massNutzung = { planDatum: '2020-01-01', grz: 0.4, gfz: 0.8 };
-    const wb = await load(await exportWithTemplate(await buildSampleTemplate(), p, computeProject(p)));
-    const ws = wb.getWorksheet('GRZ GFZ')!;
-    expect(val(ws, 'B10')).toBe('BauNVO 1990 ff. · Vollgeschosse nach BauO NRW 2018');
-    expect([val(ws, 'C15'), val(ws, 'D15'), val(ws, 'E15')]).toEqual([100, 0.2, 0.4]);
-    expect([val(ws, 'C16'), val(ws, 'D16')]).toEqual([130, 0.26]);
-    expect([val(ws, 'C17'), val(ws, 'D17')]).toEqual([200, 0.4]);
-    expect(val(ws, 'D18')).toBe(2);
-    expect([val(ws, 'B21'), val(ws, 'C21'), val(ws, 'D21')]).toEqual(['EG', 100, 'ja']);
-    expect([val(ws, 'B22'), val(ws, 'C22')]).toEqual(['OG', 100]);
-    expect(formula(ws, 'C23')).toBe('SUM(C21:C22)');
-    const lpRow = ws.getRows(30, 20)!.find((r) => r.getCell(2).value === 'Zufahrt')!;
-    expect([lpRow.getCell(3).value, lpRow.getCell(4).value, lpRow.getCell(5).value, lpRow.getCell(6).value]).toEqual(['Zufahrt', 'teilversiegelt', 30, 'GRZ II']);
   });
 });

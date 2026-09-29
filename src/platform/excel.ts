@@ -528,64 +528,6 @@ export async function buildSampleTemplate(): Promise<Uint8Array> {
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].forEach((c) => (ws.getCell(`${c}15`).border = { top: MEDIUM, bottom: THIN }));
   }
 
-  /* Maß der baulichen Nutzung: GRZ, GFZ, Vollgeschosse, Flächenbilanz, Lageplan-Flächen */
-  {
-    const ws = wb.addWorksheet('GRZ GFZ');
-    sampleHeader(ws, 'Maß der baulichen Nutzung', 'E');
-    const RATIO = '0.00';
-    const put = (ref: string, v: unknown, fmt?: string, bold = false) => {
-      const c = ws.getCell(ref);
-      c.value = v as never;
-      if (fmt) c.numFmt = fmt;
-      if (bold) c.font = { bold: true };
-    };
-    put('A10', 'Grundlage', undefined, true);
-    put('B10', '{{baunvo.fassung}} · Vollgeschosse nach {{bauo.fassung}}');
-    put('A11', 'Bebauungsplan vom');
-    put('B11', '{{bplan.datum}}');
-    put('A12', 'Grundstücksfläche');
-    put('C12', '{{grundstueck.flaeche_nachweis}}', M2);
-    ws.getRow(14).values = [null, null, 'Fläche', 'vorhanden', 'zulässig'];
-    ws.getRow(14).font = { bold: true };
-    const zeile = (r: number, name: string, fl: string, ist: string, zul: string, fmt = RATIO) => {
-      put(`A${r}`, name);
-      if (fl) put(`C${r}`, fl, M2);
-      put(`D${r}`, ist, fmt, true);
-      put(`E${r}`, zul, fmt);
-    };
-    zeile(15, 'GRZ / GRZ I', '{{grz.flaeche}}', '{{grz}}', '{{grz.zulaessig}}');
-    zeile(16, 'GRZ II (§ 19 Abs. 4)', '{{grz.ii.flaeche}}', '{{grz.ii}}', '{{grz.ii.zulaessig}}');
-    zeile(17, 'GFZ', '{{gf}}', '{{gfz}}', '{{gfz.zulaessig}}');
-    zeile(18, 'Vollgeschosse', '', '{{vollgeschosse}}', '{{vollgeschosse.zulaessig}}', '0');
-
-    put('A20', 'Geschossfläche', undefined, true);
-    ws.getRow(21).values = [null, '{{geschoss.name}}', '{{geschoss.gf}}', '{{geschoss.vollgeschoss}}'];
-    ws.getCell('C21').numFmt = M2;
-    put('B22', 'Summe', undefined, true);
-    put('C22', { formula: 'SUM(C21:C21)' }, M2, true);
-
-    put('A24', 'Flächenbilanz', undefined, true);
-    const bilanz: [string, string][] = [
-      ['Gebäude', '{{bilanz.gebaeude}}'],
-      ['vollversiegelt', '{{bilanz.vollversiegelt}}'],
-      ['teilversiegelt', '{{bilanz.teilversiegelt}}'],
-      ['Grünfläche', '{{bilanz.gruen}}'],
-    ];
-    bilanz.forEach(([n, v], i) => {
-      put(`B${25 + i}`, n);
-      put(`C${25 + i}`, v, M2);
-    });
-    put('B29', 'Summe', undefined, true);
-    put('C29', { formula: 'SUM(C25:C28)' }, M2, true);
-
-    put('A31', 'Lageplan-Flächen', undefined, true);
-    ws.getRow(32).values = [null, 'Fläche', 'Nutzung', 'Versiegelung', 'm²', 'Anrechnung'];
-    ws.getRow(32).font = { bold: true };
-    ws.getRow(33).values = [null, '{{lageplan[eigen].name}}', '{{lageplan[eigen].nutzung}}', '{{lageplan[eigen].versiegelung}}', '{{lageplan[eigen].flaeche}}', '{{lageplan[eigen].anrechnung}}'];
-    ws.getCell('E33').numFmt = M2;
-    [22, 26, 16, 14, 14, 18].forEach((w, i) => (ws.getColumn(i + 1).width = w));
-  }
-
   /* Raumliste (alle Räume, eine Zeile je Raum) */
   {
     const rs = wb.addWorksheet('Räume');

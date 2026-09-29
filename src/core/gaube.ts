@@ -184,22 +184,3 @@ export function gaubenGrundriss(d: Dach, fr: RoofFrame): Point[][] {
     return [P(ua, g.vorne), P(ub, g.vorne), P(ub, g.vorne + m.tiefe), P(ua, g.vorne + m.tiefe)];
   });
 }
-
-/** Höhe der Gaubendächer über dem Fußboden an einem Punkt (−∞, wenn keine Gaube darüber) */
-export function gaubenHoeheAt(d: Dach, fr: RoofFrame, p: Point): number {
-  let best = -Infinity;
-  for (const top of gaubenFaces(d, fr).tops) {
-    for (let k = 1; k + 1 < top.length; k++) {
-      const a = top[0];
-      const b = top[k];
-      const c = top[k + 1];
-      const den = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-      if (Math.abs(den) < 1e-12) continue;
-      const l1 = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) / den;
-      const l2 = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) / den;
-      const l3 = 1 - l1 - l2;
-      if (l1 >= -1e-9 && l2 >= -1e-9 && l3 >= -1e-9) best = Math.max(best, l1 * a.z + l2 * b.z + l3 * c.z);
-    }
-  }
-  return best;
-}

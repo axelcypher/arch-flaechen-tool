@@ -2,14 +2,11 @@ import { useMemo, useState } from 'react';
 import type { AreaTotals } from '../core/calc';
 import { computeProject } from '../core/calc';
 import { briRechenweg } from '../core/rechenweg';
-import { baunvoLabel, bauoLabel, massNachweis } from '../core/massNutzung';
 import { fmt2 } from '../core/format';
 import { anschriftEinzeilig, flurText } from '../core/model';
 import { NUF_IDS, nutzungInfo, WOFL_KATEGORIEN } from '../core/norms';
 import { useEditor } from '../store/store';
 import { PlanFigure } from './PlanFigure';
-
-const zahl2 = (v: number) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Druckbare Flächenaufstellung (DIN 277 / WoFlV). */
 export function Report() {
@@ -17,7 +14,6 @@ export function Report() {
   const setOpen = useEditor((s) => s.setReportOpen);
   const r = useMemo(() => computeProject(project), [project]);
   const rechenweg = useMemo(() => briRechenweg(project), [project]);
-  const mass = useMemo(() => (project.massNutzung || project.storeys.some((s) => s.lageplan) ? massNachweis(project) : null), [project]);
   const today = new Date().toLocaleDateString('de-DE');
   const [showPlans, setShowPlans] = useState(true);
   const [showBackground, setShowBackground] = useState(false);
@@ -141,89 +137,6 @@ export function Report() {
           „Mittlere Höhe“: Volumen exakt aus den Dachflächen bzw. dem IFC-Modell, als Grundfläche × mittlere Höhe dargestellt.
         </p>
 
-        {mass && (
-          <>
-            <h2>Maß der baulichen Nutzung</h2>
-            <p className="report-note">
-              {baunvoLabel(mass.recht.baunvo)} · Vollgeschosse nach {bauoLabel(mass.recht.bauo)}
-              {project.massNutzung?.planDatum && ` · Bebauungsplan vom ${new Date(project.massNutzung.planDatum).toLocaleDateString('de-DE')}`}
-              {mass.grundstueck.flaeche !== undefined && ` · Grundstücksfläche ${fmt2(mass.grundstueck.flaeche)} m²`}
-            </p>
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th />
-                  <th className="num">Fläche [m²]</th>
-                  <th className="num">vorhanden</th>
-                  <th className="num">zulässig</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>{mass.grz2 ? 'GRZ I (Hauptanlage)' : 'GRZ'}</td>
-                  <td className="num">{fmt2(mass.grz.wert * (mass.grundstueck.flaeche ?? 0))}</td>
-                  <td className="num strong">
-                    {zahl2(mass.grz.wert)}
-                    {mass.grz.mitOffenen !== undefined && ` (bis ${zahl2(mass.grz.mitOffenen)})`}
-                  </td>
-                  <td className="num">{mass.grz.zulaessig !== undefined ? zahl2(mass.grz.zulaessig) : '–'}</td>
-                </tr>
-                {mass.grz2 && (
-                  <tr>
-                    <td>GRZ II (mit Garagen, Stellplätzen, Zufahrten, Nebenanlagen, unterirdischen Anlagen)</td>
-                    <td className="num">{fmt2(mass.grz2.wert * (mass.grundstueck.flaeche ?? 0))}</td>
-                    <td className="num strong">
-                      {zahl2(mass.grz2.wert)}
-                      {mass.grz2.mitOffenen !== undefined && ` (bis ${zahl2(mass.grz2.mitOffenen)})`}
-                    </td>
-                    <td className="num">{mass.grz2.zulaessig !== undefined ? zahl2(mass.grz2.zulaessig) : '–'}</td>
-                  </tr>
-                )}
-                <tr>
-                  <td>GFZ</td>
-                  <td className="num">{fmt2(mass.gf)}</td>
-                  <td className="num strong">{zahl2(mass.gfz.wert)}</td>
-                  <td className="num">{mass.gfz.zulaessig !== undefined ? zahl2(mass.gfz.zulaessig) : '–'}</td>
-                </tr>
-                <tr>
-                  <td>Vollgeschosse ({mass.geschosse.filter((g) => g.vollgeschoss).map((g) => g.name).join(', ') || 'keine'})</td>
-                  <td />
-                  <td className="num strong">{mass.vollgeschosse.anzahl}</td>
-                  <td className="num">{mass.vollgeschosse.zulaessig ?? '–'}</td>
-                </tr>
-              </tbody>
-            </table>
-            <table className="report-table">
-              <thead>
-                <tr>
-                  <th>Geschoss</th>
-                  <th>Vollgeschossprüfung</th>
-                  <th className="num">Geschossfläche [m²]</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mass.geschosse.map((g) => (
-                  <tr key={g.storeyId}>
-                    <td>{g.name}</td>
-                    <td>
-                      {g.vollgeschoss ? 'Vollgeschoss' : 'kein Vollgeschoss'}
-                      {g.automatisch ? ` – ${g.begruendung}` : ' (festgelegt)'}
-                    </td>
-                    <td className="num">{fmt2(mass.gfJeGeschoss.find((x) => x.storeyId === g.storeyId)?.flaeche ?? 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {mass.hinweise.length > 0 && (
-              <ul className="report-note">
-                {mass.hinweise.map((h, i) => (
-                  <li key={i}>{h}</li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-
         <h2>Netto-Raumfläche nach Nutzungsgruppen</h2>
         <table className="report-table">
           <thead>
@@ -254,8 +167,8 @@ export function Report() {
           </tbody>
         </table>
 
-        {r.storeys.map((sr) => {
-          const storey = project.storeys.find((x) => x.id === sr.storeyId)!;
+        {r.storeys.map((sr, idx) => {
+          const storey = project.storeys[idx];
           return (
             <section key={sr.storeyId} className={`report-storey${showPlans ? ' page-break' : ''}`}>
               <h2>

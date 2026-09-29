@@ -60,31 +60,9 @@ export interface RoomShape extends ShapeBase {
   wofl: WoflAngaben;
   /** Abzug in % von der Polygonfläche, z. B. 3 % Putzabzug bei Ermittlung aus Rohbaumaßen */
   putzabzug?: number;
-  /**
-   * Aufenthaltsraum im Sinne der BauNVO vor 1990 (Geschossfläche in Nicht-Vollgeschossen);
-   * „treppe“ = zugehöriger Treppenraum. Ohne Angabe nach Nutzung und Raumname (siehe istAufenthaltsraum).
-   */
-  aufenthalt?: 'ja' | 'nein' | 'treppe';
 }
 
-/** Versiegelungsgrad einer Fläche im Lageplan */
-export type Versiegelung = 'voll' | 'teil' | 'gruen';
-
-/** Nutzung einer Fläche im Lageplan – maßgebend für die Anrechnung auf die Grundfläche */
-export type LageplanNutzung = 'zufahrt' | 'stellplatz' | 'garage' | 'terrasse' | 'weg' | 'nebenanlage' | 'unterirdisch' | 'garten' | 'sonstige';
-
-/** Fläche im Lageplan-Geschoss (Freifläche, Belag, Garage …) für GRZ und Flächenbilanz */
-export interface FlaecheShape extends ShapeBase {
-  kind: 'flaeche';
-  nutzung: LageplanNutzung;
-  versiegelung: Versiegelung;
-  /** Fläche eines Nachbargrundstücks: nur Darstellung, zählt nirgends mit */
-  nachbar?: boolean;
-  /** mittlere Höhe der Oberfläche über ±0,00 in m (aus dem Modell) – für die Geländeoberfläche */
-  hoehe?: number;
-}
-
-export type Shape = OutlineShape | RoomShape | FlaecheShape;
+export type Shape = OutlineShape | RoomShape;
 export type ShapeKind = Shape['kind'];
 
 interface BackgroundBase {
@@ -162,10 +140,6 @@ export interface Storey {
   geschosshoeheBegrenzt?: boolean;
   /** Geschossart für Auswertung und Vorlagen; ohne Angabe automatisch (siehe istDachgeschoss) */
   dachgeschoss?: boolean;
-  /** Lageplan: kein Gebäudegeschoss (keine BGF, kein BRI), enthält die Flächen des Grundstücks */
-  lageplan?: boolean;
-  /** Vollgeschoss für GFZ und Zahl der Vollgeschosse; ohne Angabe nach der maßgebenden Bauordnung geprüft */
-  vollgeschoss?: boolean;
   shapes: Shape[];
   background?: Background;
 }
@@ -277,39 +251,6 @@ export interface Project {
   dachModell?: DachModell;
   /** Originaldateien der Importe (IFC, DXF, PDF) und die Excel-Vorlage */
   dateien?: ProjektDatei[];
-  /** Festsetzungen des Bebauungsplans für den GRZ/GFZ-Nachweis */
-  massNutzung?: MassNutzung;
-}
-
-/** BauNVO-Fassungen mit unterschiedlicher Berechnung von Grund- und Geschossfläche */
-export type BauNVOFassung = '1962' | '1968' | '1990';
-/** Vollgeschossbegriff der Bauordnung NRW (statisch nach dem Datum des Bebauungsplans) */
-export type BauOFassung = 'nw1962' | 'nw1985' | 'nrw2019';
-
-/** Einstufung einer Flächennutzung, die die BauNVO-Fassung nicht eindeutig regelt */
-export type Einstufung = 'ja' | 'nein';
-
-export interface MassNutzung {
-  /** Inkrafttreten / Satzungsbeschluss des Bebauungsplans (JJJJ-MM-TT); leer = aktuelles Recht (§ 34/35 BauGB) */
-  planDatum?: string;
-  /** abweichend vom Plandatum */
-  baunvo?: BauNVOFassung;
-  bauo?: BauOFassung;
-  grz?: number;
-  gfz?: number;
-  vollgeschosseMax?: number;
-  /** abweichende Obergrenze für die GRZ II (§ 19 Abs. 4 Satz 3) */
-  grzIIMax?: number;
-  /** festgelegte Geländeoberfläche (m über ±0,00); sonst aus den Lageplan-Flächen */
-  gelaende?: number;
-  /** Dicke des Dachaufbaus senkrecht gemessen: lichte Höhe = Dachhaut − Aufbau */
-  dachaufbau?: number;
-  /** Einfamilienhaus (BauO NW 1962/1970: lichte Höhe für Aufenthaltsräume 2,30 statt 2,50 m) */
-  einfamilienhaus?: boolean;
-  /** Umfassungswände um Aufenthaltsräume (BauNVO vor 1990) in m */
-  wandzuschlag?: number;
-  /** Festlegung für Nutzungen, die die Fassung offenlässt („prüfen“) */
-  einstufung?: Partial<Record<LageplanNutzung, Einstufung>>;
 }
 
 let idCounter = 0;
@@ -335,15 +276,6 @@ export function createProject(name = 'Neues Projekt'): Project {
 
 export function createOutline(points: Point[], name = 'BGF'): OutlineShape {
   return { id: newId('sh'), kind: 'outline', name, points, subtract: false, umschliessung: 'R' };
-}
-
-export function createFlaeche(points: Point[], name = 'Fläche'): FlaecheShape {
-  return { id: newId('sh'), kind: 'flaeche', name, points, subtract: false, umschliessung: 'R', nutzung: 'sonstige', versiegelung: 'voll' };
-}
-
-/** Geschosse des Gebäudes (ohne Lageplan) */
-export function gebaeudeGeschosse(p: Project): Storey[] {
-  return p.storeys.filter((s) => !s.lageplan);
 }
 
 export function createRoom(points: Point[], nummer: string, name = 'Raum'): RoomShape {
@@ -392,8 +324,7 @@ export function storeyElevations(p: Project): number[] {
   for (const s of p.storeys) {
     const e = s.elevation ?? z;
     out.push(e);
-    // der Lageplan ist kein Geschoss des Gebäudes und verschiebt die Geschosse darüber nicht
-    if (!s.lageplan) z = e + s.hoehe;
+    z = e + s.hoehe;
   }
   return out;
 }

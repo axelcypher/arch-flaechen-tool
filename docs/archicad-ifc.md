@@ -28,13 +28,6 @@ Beim **Dachgeschoss** reicht der Umriss bis dorthin, wo die Dachhaut die Fußbod
 Geschosshöhen ergeben sich aus der Kote des nächsten *höher* liegenden Geschosses; Geschosse auf
 gleicher Kote (z. B. „Lageplan“ neben „UG“) zählen dabei nicht.
 
-## Lageplan-Geschoss
-
-Ein Geschoss, dessen Name „Lageplan“ enthält, wird kein Gebäudegeschoss, sondern der Lageplan für den
-GRZ/GFZ-Nachweis – egal, wo es im IFC einsortiert ist. Seine Bauteile und das IFC-Gelände werden Lageplan-Flächen
-(Nutzung und Versiegelung aus dem Namen, Höhe der Oberseite); Flächen ohne Verbindung zum Gebäude werden als
-Nachbargrundstück markiert. Details: [GRZ, GFZ und Vollgeschosse](grz-gfz.md).
-
 ## BGF und BRI bei Dachgeschossen
 
 Die **BGF** wird je Grundrissebene (Geschoss) auf Fußbodenhöhe ermittelt. Ein Geschoss ohne Wände

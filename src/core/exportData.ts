@@ -4,9 +4,6 @@ import type { Project } from './model';
 import { anschriftEinzeilig, flurText, istDachgeschoss, plzOrt } from './model';
 import { NUF_IDS, NUTZUNGSGRUPPEN, nutzungInfo, WOFL_KATEGORIEN } from './norms';
 import { briKoerper, briRechenweg } from './rechenweg';
-import { nutzungLabel, versiegelungInfo } from './lageplan';
-import type { Anrechnung } from './massNutzung';
-import { baunvoLabel, bauoLabel, massNachweis } from './massNutzung';
 
 /**
  * Datengrundlage für Excel-Export und Vorlagen (Syntax siehe docs/excel-vorlagen.md).
@@ -24,7 +21,7 @@ export type Value = string | number;
 /** Datensatz; Schlüssel mit „_“ sind intern (Zuordnung in Blöcken) */
 export type Row = Record<string, Value>;
 
-export const COLLECTIONS = ['geschoss', 'raum', 'wohnung', 'nutzung', 'bri', 'koerper', 'lageplan'] as const;
+export const COLLECTIONS = ['geschoss', 'raum', 'wohnung', 'nutzung', 'bri', 'koerper'] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
 export interface ExportContext {
@@ -130,50 +127,6 @@ export function buildExportContext(project: Project, result: ProjectResult, date
 
   const sumBy = (rows: Row[], key: string) => r2(rows.reduce((a, x) => a + (typeof x[key] === 'number' ? (x[key] as number) : 0), 0));
 
-  // Maß der baulichen Nutzung
-  const mass = massNachweis(project);
-  const G = mass.grundstueck.flaeche;
-  const r4 = (v: number) => Math.round(v * 10000) / 10000;
-  const opt = (v: number | undefined, f = r4) => (v === undefined ? '' : f(v));
-  Object.assign(scalars, {
-    'bplan.datum': project.massNutzung?.planDatum ? new Date(project.massNutzung.planDatum).toLocaleDateString('de-DE') : '',
-    'baunvo.fassung': baunvoLabel(mass.recht.baunvo),
-    'bauo.fassung': bauoLabel(mass.recht.bauo),
-    'grundstueck.flaeche_nachweis': opt(G, r2),
-    gelaende: r2(mass.gelaende.hoehe),
-    grz: r4(mass.grz.wert),
-    'grz.zulaessig': opt(mass.grz.zulaessig),
-    'grz.flaeche': r2(mass.grz.wert * (G ?? 0)),
-    'grz.mit_offenen': opt(mass.grz.mitOffenen),
-    'grz.reserve': opt(mass.grz.reserve, r2),
-    'grz.ii': mass.grz2 ? r4(mass.grz2.wert) : '',
-    'grz.ii.zulaessig': opt(mass.grz2?.zulaessig),
-    'grz.ii.flaeche': mass.grz2 ? r2(mass.grz2.wert * (G ?? 0)) : '',
-    'grz.ii.mit_offenen': opt(mass.grz2?.mitOffenen),
-    gf: r2(mass.gf),
-    gfz: r4(mass.gfz.wert),
-    'gfz.zulaessig': opt(mass.gfz.zulaessig),
-    'gfz.reserve': opt(mass.gfz.reserve, r2),
-    vollgeschosse: mass.vollgeschosse.anzahl,
-    'vollgeschosse.zulaessig': mass.vollgeschosse.zulaessig ?? '',
-    'bilanz.gebaeude': r2(mass.bilanz.gebaeude),
-    'bilanz.vollversiegelt': r2(mass.bilanz.voll),
-    'bilanz.teilversiegelt': r2(mass.bilanz.teil),
-    'bilanz.gruen': r2(mass.bilanz.gruen),
-    'bilanz.summe': r2(mass.bilanz.summe),
-  });
-  const ANR: Record<Anrechnung, string> = { hauptanlage: 'zählt', grz2: 'GRZ II', garage01: 'bis 0,1 anrechnungsfrei', nein: 'zählt nicht', pruefen: 'prüfen' };
-  const lageplan: Row[] = mass.lageplan.map((l, i) => ({
-    nr: i + 1,
-    name: l.name,
-    nutzung: nutzungLabel(l.nutzung),
-    versiegelung: versiegelungInfo(l.versiegelung).label,
-    flaeche: r2(l.flaeche),
-    flaeche_aussen: r2(l.flaecheAussen),
-    anrechnung: ANR[l.anrechnung],
-    nachbar: l.nachbar ? 'ja' : '',
-  }));
-
   const geschoss: Row[] = result.storeys.map((s, i) => {
     const rooms = raum.filter((r) => r._geschossId === s.storeyId);
     return {
@@ -187,8 +140,6 @@ export function buildExportContext(project: Project, result: ProjectResult, date
       ...totalsRow(s),
       wofl_roh: sumBy(rooms, 'wofl_roh'),
       nebenflaeche: sumBy(rooms.filter((r) => !r.wohnflaeche), 'flaeche'),
-      vollgeschoss: mass.geschosse.find((g) => g.storeyId === s.storeyId)?.vollgeschoss ? 'ja' : '',
-      gf: r2(mass.gfJeGeschoss.find((g) => g.storeyId === s.storeyId)?.flaeche ?? 0),
     };
   });
 
@@ -248,7 +199,7 @@ export function buildExportContext(project: Project, result: ProjectResult, date
 
   return {
     scalars,
-    collections: { geschoss, raum, wohnung, nutzung, bri, koerper, lageplan },
+    collections: { geschoss, raum, wohnung, nutzung, bri, koerper },
     byName: {
       geschoss: new Map(geschoss.map((g) => [String(g.name), g])),
       wohnung: new Map(wohnung.map((w) => [String(w.name), w])),
@@ -358,22 +309,6 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
     ],
   },
   {
-    group: 'Maß der baulichen Nutzung (GRZ/GFZ-Tab)',
-    keys: [
-      ['bplan.datum, baunvo.fassung, bauo.fassung', 'Datum des Bebauungsplans, angewandte BauNVO-Fassung und Vollgeschossbegriff'],
-      ['grz, grz.zulaessig, grz.flaeche, grz.reserve', 'GRZ (vor 1990) bzw. GRZ I, zulässig, angerechnete Grundfläche [m²], Reserve [m²]'],
-      ['grz.mit_offenen', 'GRZ einschließlich der noch nicht eingestuften Flächen („prüfen“)'],
-      ['grz.ii, grz.ii.zulaessig, grz.ii.flaeche, grz.ii.mit_offenen', 'GRZ II nach § 19 Abs. 4 BauNVO 1990 (sonst leer)'],
-      ['gf, gfz, gfz.zulaessig, gfz.reserve', 'Geschossfläche [m²], GFZ, zulässig, Reserve [m²]'],
-      ['vollgeschosse, vollgeschosse.zulaessig', 'Zahl der Vollgeschosse'],
-      ['grundstueck.flaeche_nachweis, gelaende', 'Grundstücksfläche des Nachweises (Projektdaten oder Lageplan), Geländeoberfläche [m]'],
-      ['bilanz.gebaeude, bilanz.vollversiegelt, bilanz.teilversiegelt, bilanz.gruen, bilanz.summe', 'Flächenbilanz des Grundstücks [m²]'],
-      ['geschoss.vollgeschoss, geschoss.gf', '„ja“ bei Vollgeschossen; Geschossfläche des Geschosses [m²]; Filter geschoss[vollgeschoss]'],
-      ['lageplan.name, lageplan.nutzung, lageplan.versiegelung', 'Zeile je Lageplan-Fläche; Filter lageplan[eigen] / lageplan[nachbar]'],
-      ['lageplan.flaeche, lageplan.flaeche_aussen, lageplan.anrechnung, lageplan.nachbar', 'Fläche, davon außerhalb des Gebäudes, Anrechnung auf die Grundfläche, „ja“ bei Nachbargrundstücken'],
-    ],
-  },
-  {
     group: 'wohnung.* (Zeile je Wohnung) bzw. wohnung:NAME.*',
     keys: [
       ['wohnung.nr', 'laufende Nummer'],
@@ -418,9 +353,6 @@ const NAMED_FILTERS: Record<string, (r: Row) => boolean> = {
   normalgeschoss: (r) => r.dachgeschoss !== 'ja',
   dach: (r) => r.art === 'Dach',
   gaube: (r) => r.art === 'Gaube',
-  eigen: (r) => r.nachbar !== 'ja',
-  nachbar: (r) => r.nachbar === 'ja',
-  vollgeschoss: (r) => r.vollgeschoss === 'ja',
   gauben: (r) => r.art === 'Gaube',
   grundkoerper: (r) => r.art === 'Grundkörper',
   'grundkörper': (r) => r.art === 'Grundkörper',

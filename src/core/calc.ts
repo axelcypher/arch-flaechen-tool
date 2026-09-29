@@ -139,9 +139,7 @@ export function computeStorey(storey: Storey, project: Project): StoreyResult {
   const t = emptyTotals();
   const rooms: RoomResult[] = [];
 
-  // der Lageplan ist kein Geschoss des Gebäudes
-  for (const s of storey.lageplan ? [] : storey.shapes) {
-    if (s.kind === 'flaeche') continue;
+  for (const s of storey.shapes) {
     const sign = s.subtract ? -1 : 1;
     const a = sign * (s.kind === 'room' ? roomArea(s) : polygonArea(s.points));
     if (s.kind === 'outline') {
@@ -188,8 +186,7 @@ function accumulate(target: AreaTotals, s: AreaTotals) {
 }
 
 export function computeProject(project: Project): ProjectResult {
-  // der Lageplan ist kein Geschoss des Gebäudes
-  const storeys = project.storeys.filter((s) => !s.lageplan).map((s) => computeStorey(s, project));
+  const storeys = project.storeys.map((s) => computeStorey(s, project));
   const total = emptyTotals();
   for (const s of storeys) accumulate(total, s);
 

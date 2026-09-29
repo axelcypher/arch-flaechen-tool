@@ -170,13 +170,6 @@ Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI Teilkörper�
 | 14 | `{{/geschoss}}` | | | | | | | | |
 | 15 | Brutto-Rauminhalt gesamt | | | | | | | | `=SUMME(I13:I13)` |
 
-## GRZ, GFZ und Vollgeschosse
-
-Aus dem Tab GRZ/GFZ stehen Einzelwerte (`{{grz}}`, `{{grz.ii}}`, `{{gfz}}`, `{{gf}}`, `{{vollgeschosse}}`,
-`{{baunvo.fassung}}`, `{{bilanz.gruen}}` …), die Sammlung `lageplan` (Zeile je Lageplan-Fläche, Filter `[eigen]` /
-`[nachbar]`) und je Geschoss `geschoss.vollgeschoss` und `geschoss.gf` (Filter `geschoss[vollgeschoss]`) bereit.
-Die Muster-Vorlage enthält das Blatt „GRZ GFZ“. Berechnung: [GRZ, GFZ und Vollgeschosse](grz-gfz.md).
-
 ## Filter
 
 | Filter | Bedeutung |

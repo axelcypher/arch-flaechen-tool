@@ -4,8 +4,6 @@ import type {
   DateiArt,
   Grundstueck,
   KontaktArt,
-  LageplanNutzung,
-  MassNutzung,
   Nutzungsgruppe,
   Project,
   ProjectMeta,
@@ -14,7 +12,6 @@ import type {
   Shape,
   Storey,
   VectorBackground,
-  Versiegelung,
   WoflKategorie,
 } from './model';
 import { anschriftAusText, createProject, newId } from './model';
@@ -61,10 +58,10 @@ export function parseProjectData(raw: unknown): Project {
     name: str(raw.name, base.name),
     meta: normalizeMeta(raw.meta),
     settings: { ...base.settings, ...(isObj(raw.settings) ? raw.settings : {}) } as Project['settings'],
-    storeys: storeysRaw.filter(isObj).map(normalizeStorey),
+    // Lageplan-Geschosse aus 0.7.0 gehören nicht zum Gebäude (GRZ/GFZ ist ein eigenes Tool)
+    storeys: storeysRaw.filter(isObj).filter((s) => s.lageplan !== true).map(normalizeStorey),
   };
   if (project.storeys.length === 0) project.storeys = base.storeys;
-  if (isObj(raw.massNutzung)) project.massNutzung = normalizeMassNutzung(raw.massNutzung);
   if (Array.isArray(raw.dateien)) {
     const dateien = raw.dateien.filter(isObj).map(normalizeDatei).filter((d): d is ProjektDatei => d !== null);
     if (dateien.length) project.dateien = dateien;
@@ -103,25 +100,6 @@ function normalizeMeta(v: unknown): ProjectMeta {
   };
 }
 
-const NUTZUNGEN: LageplanNutzung[] = ['zufahrt', 'stellplatz', 'garage', 'terrasse', 'weg', 'nebenanlage', 'unterirdisch', 'garten', 'sonstige'];
-
-function normalizeMassNutzung(m: Record<string, unknown>): MassNutzung {
-  const out: MassNutzung = {};
-  if (typeof m.planDatum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.planDatum)) out.planDatum = m.planDatum;
-  if (m.baunvo === '1962' || m.baunvo === '1968' || m.baunvo === '1990') out.baunvo = m.baunvo;
-  if (m.bauo === 'nw1962' || m.bauo === 'nw1985' || m.bauo === 'nrw2019') out.bauo = m.bauo;
-  for (const k of ['grz', 'gfz', 'vollgeschosseMax', 'grzIIMax', 'gelaende', 'dachaufbau', 'wandzuschlag'] as const) {
-    if (typeof m[k] === 'number' && Number.isFinite(m[k])) out[k] = m[k] as number;
-  }
-  if (m.einfamilienhaus === true) out.einfamilienhaus = true;
-  if (isObj(m.einstufung)) {
-    const e: MassNutzung['einstufung'] = {};
-    for (const n of NUTZUNGEN) if (m.einstufung[n] === 'ja' || m.einstufung[n] === 'nein') e[n] = m.einstufung[n] as 'ja' | 'nein';
-    out.einstufung = e;
-  }
-  return out;
-}
-
 const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage'];
 
 function normalizeDatei(d: Record<string, unknown>): ProjektDatei | null {
@@ -140,8 +118,6 @@ function normalizeStorey(s: Record<string, unknown>): Storey {
   };
   if (typeof s.dachgeschoss === 'boolean') storey.dachgeschoss = s.dachgeschoss;
   if (s.geschosshoeheBegrenzt === true) storey.geschosshoeheBegrenzt = true;
-  if (s.lageplan === true) storey.lageplan = true;
-  if (typeof s.vollgeschoss === 'boolean') storey.vollgeschoss = s.vollgeschoss;
   const bg = normalizeBackground(s.background);
   if (bg) storey.background = bg;
   return storey;
@@ -164,16 +140,6 @@ function normalizeShape(s: Record<string, unknown>): Shape | null {
   if (s.kind === 'outline') {
     return { ...common, kind: 'outline', hoehe: typeof s.hoehe === 'number' ? s.hoehe : undefined, dach: normalizeDach(s.dach) };
   }
-  if (s.kind === 'flaeche') {
-    return {
-      ...common,
-      kind: 'flaeche',
-      nutzung: oneOf<LageplanNutzung>(s.nutzung, ['zufahrt', 'stellplatz', 'garage', 'terrasse', 'weg', 'nebenanlage', 'unterirdisch', 'garten', 'sonstige'], 'sonstige'),
-      versiegelung: oneOf<Versiegelung>(s.versiegelung, ['voll', 'teil', 'gruen'], 'voll'),
-      ...(s.nachbar === true ? { nachbar: true } : {}),
-      ...(typeof s.hoehe === 'number' && Number.isFinite(s.hoehe) ? { hoehe: s.hoehe } : {}),
-    };
-  }
   if (s.kind === 'room') {
     const w = isObj(s.wofl) ? s.wofl : {};
     return {
@@ -181,7 +147,6 @@ function normalizeShape(s: Record<string, unknown>): Shape | null {
       kind: 'room',
       nummer: str(s.nummer, ''),
       putzabzug: typeof s.putzabzug === 'number' && s.putzabzug > 0 && s.putzabzug < 100 ? s.putzabzug : undefined,
-      ...(s.aufenthalt === 'ja' || s.aufenthalt === 'nein' || s.aufenthalt === 'treppe' ? { aufenthalt: s.aufenthalt } : {}),
       nutzung: oneOf<Nutzungsgruppe>(s.nutzung, NUTZUNGSGRUPPEN.map((n) => n.id), 'NUF1'),
       wofl: {
         kategorie: oneOf<WoflKategorie>(w.kategorie, WOFL_KATEGORIEN.map((k) => k.id), 'keine'),

@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Canvas } from './components/Canvas';
 import { ExcelDialog } from './components/ExcelDialog';
-import { GrzGfzView } from './components/GrzGfzView';
 import { Properties } from './components/Properties';
 import { Report } from './components/Report';
 import { Sidebar } from './components/Sidebar';
@@ -43,18 +42,10 @@ export function App() {
             <button className={mainView === '3d' ? 'active' : ''} onClick={() => setMainView('3d')}>
               3D
             </button>
-            <button className={mainView === 'grz' ? 'active' : ''} onClick={() => setMainView('grz')} title="GRZ, GFZ und Vollgeschosse nach dem Bebauungsplan">
-              GRZ/GFZ
-            </button>
           </div>
           <div className={mainView === '2d' ? 'view-pane' : 'view-pane hidden'}>
             <Canvas />
           </div>
-          {mainView === 'grz' && (
-            <div className="view-pane view-scroll">
-              <GrzGfzView />
-            </div>
-          )}
           {mainView === '3d' && (
             <div className="view-pane">
               <Suspense fallback={<p className="busy view-loading">3D-Ansicht wird geladen …</p>}>
