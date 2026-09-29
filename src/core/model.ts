@@ -262,11 +262,12 @@ export function storeyElevations(p: Project): number[] {
 
 /**
  * Dachgeschoss? Ohne ausdrückliche Angabe gilt ein Geschoss als Dachgeschoss, sobald einer seiner
- * BGF-Umrisse ein geneigtes Dach (oder ein Dach aus dem IFC-Modell) trägt.
+ * BGF-Umrisse eine geneigte Dachform trägt. Ein Dach aus dem IFC-Modell zählt nicht: Es steht auch
+ * über Teilen unterer Geschosse (Vordach, Anbau), die sonst fälschlich als Dachgeschoss gälten.
  */
 export function istDachgeschoss(s: Storey): boolean {
   if (s.dachgeschoss !== undefined) return s.dachgeschoss;
-  return s.shapes.some((sh) => sh.kind === 'outline' && !sh.subtract && sh.dach !== undefined && sh.dach.typ !== 'flach');
+  return s.shapes.some((sh) => sh.kind === 'outline' && !sh.subtract && sh.dach !== undefined && sh.dach.typ !== 'flach' && sh.dach.typ !== 'modell');
 }
 
 /** Anrechenbare Grundfläche eines Raums (Polygonfläche abzüglich Putzabzug) */

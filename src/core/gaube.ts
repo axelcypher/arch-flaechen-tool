@@ -2,10 +2,12 @@ import type { Point } from './geometry';
 import type { Dach, Point3, RoofFrame } from './roof';
 
 /**
- * Dachgauben auf einer Traufseite eines geneigten Dachs.
+ * Dachgauben auf einer Dachfläche eines geneigten Dachs.
  *
  * Lage im Dachsystem (u entlang First, v quer): Die Gaube steht auf der Dachfläche, die von der Traufe
- * bei v0 (seite 0) bzw. v1 (seite 1) ansteigt. s ist der waagerechte Abstand von dieser Traufe.
+ * bei v0 (seite 0) bzw. v1 (seite 1) ansteigt, beim Walm-/Zeltdach auch auf einer Walmfläche, die von
+ * u0 (seite 2) bzw. u1 (seite 3) ansteigt. s ist der waagerechte Abstand von dieser Traufe, a die Lage
+ * entlang der Traufe.
  * Gerechnet wird nur der Rauminhalt ÜBER der Hauptdachfläche (der Teil darunter steckt schon im Dach).
  *
  *   Schleppgaube   Gaubendach mit Neigung β < α, schneidet das Hauptdach nach der Tiefe T:
@@ -17,14 +19,15 @@ import type { Dach, Point3, RoofFrame } from './roof';
  */
 
 export type GaubenTyp = 'schlepp' | 'flach' | 'sattel';
+export type GaubenSeite = 0 | 1 | 2 | 3;
 
 export interface Gaube {
   typ: GaubenTyp;
-  /** Traufseite: 0 = Dachfläche von v0 aus, 1 = von v1 aus */
-  seite: 0 | 1;
-  /** Abstand der Gaubenwange (Seite zu u0) vom Rand des Dachs in Firstrichtung [m] */
+  /** Dachfläche: 0/1 = Traufseiten (von v0 bzw. v1 aus), 2/3 = Walmseiten (von u0 bzw. u1 aus) */
+  seite: GaubenSeite;
+  /** Abstand der Gaubenwange vom Rand des Dachs entlang der Traufe (Traufseite: ab u0, Walmseite: ab v0) [m] */
   abstand: number;
-  /** Breite B (in Firstrichtung) [m] */
+  /** Breite B (entlang der Traufe) [m] */
   breite: number;
   /** waagerechter Abstand der Gaubenvorderwand von der Traufe [m] */
   vorne: number;
@@ -56,9 +59,36 @@ export function gaubenMoeglich(d: Dach | undefined): boolean {
   return !!d && ['pult', 'sattel', 'walm', 'kruppelwalm', 'zelt', 'mansard', 'mansardwalm'].includes(d.typ);
 }
 
-/** Neigung α der Hauptdachfläche, auf der die Gaube steht (Mansarddach: untere, steile Fläche) */
-export function hauptneigung(d: Dach): number {
-  return clampDeg(d.typ === 'mansard' || d.typ === 'mansardwalm' ? (d.neigungUnten ?? 70) : d.neigung);
+/** Hat das Dach Walmflächen, auf denen Gauben stehen können? */
+export function hatWalmseiten(d: Dach | undefined): boolean {
+  return !!d && ['walm', 'zelt', 'mansardwalm'].includes(d.typ);
+}
+
+/** Neigung α der Hauptdachfläche, auf der die Gaube steht (Mansarddach: untere, steile Fläche; Walmseite: Walmneigung) */
+export function hauptneigung(d: Dach, seite: GaubenSeite = 0): number {
+  if (d.typ === 'mansard' || d.typ === 'mansardwalm') return clampDeg(d.neigungUnten ?? 70);
+  if (seite >= 2 && d.typ === 'walm') return clampDeg(d.neigungWalm ?? d.neigung);
+  return clampDeg(d.neigung);
+}
+
+/**
+ * Lage einer Gaube im Grundriss: (a, s) → Punkt, mit a entlang der Traufe (absolut im Dachsystem) und
+ * s als waagerechtem Abstand von der Traufe. a0 ist der Rand des Dachs, ab dem „abstand“ zählt.
+ */
+export function gaubenLage(g: Gaube, fr: RoofFrame): { a0: number; P: (a: number, s: number) => Point } {
+  const c = Math.cos(rad(fr.angle));
+  const sn = Math.sin(rad(fr.angle));
+  const xy = (u: number, v: number) => ({ x: u * c - v * sn, y: u * sn + v * c });
+  switch (g.seite) {
+    case 1:
+      return { a0: fr.u0, P: (a, s) => xy(a, fr.v1 - s) };
+    case 2:
+      return { a0: fr.v0, P: (a, s) => xy(fr.u0 + s, a) };
+    case 3:
+      return { a0: fr.v0, P: (a, s) => xy(fr.u1 - s, a) };
+    default:
+      return { a0: fr.u0, P: (a, s) => xy(a, fr.v0 + s) };
+  }
 }
 
 export function defaultGaube(d: Dach, fr: RoofFrame): Gaube {
@@ -81,7 +111,7 @@ export interface GaubenMasse {
 }
 
 export function gaubenMasse(g: Gaube, d: Dach): GaubenMasse {
-  const alpha = hauptneigung(d);
+  const alpha = hauptneigung(d, g.seite);
   const ta = Math.tan(rad(alpha));
   const B = Math.max(0, g.breite);
   if (g.typ === 'sattel') {
@@ -107,18 +137,14 @@ export function gaubenFaces(d: Dach, fr: RoofFrame): { tops: Point3[][]; sides: 
   const tops: Point3[][] = [];
   const sides: Point3[][] = [];
   if (!d.gauben?.length || !gaubenMoeglich(d)) return { tops, sides };
-  const c = Math.cos(rad(fr.angle));
-  const sn = Math.sin(rad(fr.angle));
   for (const g of d.gauben) {
     const m = gaubenMasse(g, d);
     if (m.volumen <= 1e-9) continue;
     const ta = Math.tan(rad(m.alpha));
-    // (u, s, Höhe über der Traufe der Dachfläche) → Grundriss
-    const P = (u: number, s: number, z: number): Point3 => {
-      const v = g.seite === 0 ? fr.v0 + s : fr.v1 - s;
-      return { x: u * c - v * sn, y: u * sn + v * c, z: d.traufhoehe + z };
-    };
-    const ua = fr.u0 + g.abstand;
+    const lage = gaubenLage(g, fr);
+    // (a, s, Höhe über der Traufe der Dachfläche) → Grundriss
+    const P = (a: number, s: number, z: number): Point3 => ({ ...lage.P(a, s), z: d.traufhoehe + z });
+    const ua = lage.a0 + g.abstand;
     const ub = ua + g.breite;
     const sf = g.vorne;
     const sb = sf + m.tiefe;
@@ -150,15 +176,10 @@ export function gaubenFaces(d: Dach, fr: RoofFrame): { tops: Point3[][]; sides: 
 /** Grundriss der Gauben (für Prüfungen und Anzeige) */
 export function gaubenGrundriss(d: Dach, fr: RoofFrame): Point[][] {
   if (!d.gauben?.length || !gaubenMoeglich(d)) return [];
-  const c = Math.cos(rad(fr.angle));
-  const sn = Math.sin(rad(fr.angle));
   return d.gauben.map((g) => {
     const m = gaubenMasse(g, d);
-    const P = (u: number, s: number) => {
-      const v = g.seite === 0 ? fr.v0 + s : fr.v1 - s;
-      return { x: u * c - v * sn, y: u * sn + v * c };
-    };
-    const ua = fr.u0 + g.abstand;
+    const { a0, P } = gaubenLage(g, fr);
+    const ua = a0 + g.abstand;
     const ub = ua + g.breite;
     return [P(ua, g.vorne), P(ub, g.vorne), P(ub, g.vorne + m.tiefe), P(ua, g.vorne + m.tiefe)];
   });

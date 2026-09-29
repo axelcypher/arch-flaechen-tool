@@ -3,8 +3,8 @@ import { modellRoofParams } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { rectPoints } from '../core/geometry';
 import type { OutlineShape, Project, Storey } from '../core/model';
-import type { Gaube, GaubenTyp } from '../core/gaube';
-import { defaultGaube, GAUBEN_TYPEN, gaubenMasse, gaubenMoeglich, gaubenVolumen } from '../core/gaube';
+import type { Gaube, GaubenSeite, GaubenTyp } from '../core/gaube';
+import { defaultGaube, GAUBEN_TYPEN, gaubenMasse, gaubenMoeglich, gaubenVolumen, hatWalmseiten } from '../core/gaube';
 import type { Dach, DachTyp, Point3 } from '../core/roof';
 import { DACH_TYPEN, defaultDach, roofFrame, roofStats, solidFaces } from '../core/roof';
 import { meshRoofStats } from '../core/roofMesh';
@@ -212,10 +212,23 @@ function GaubenEditor({ dach, points, onChange }: { dach: Dach; points: OutlineS
   const fr = roofFrame(dach, points);
   const L = fr.u1 - fr.u0;
   const B = fr.v1 - fr.v0;
-  // Gauben enden spätestens am First (Pultdach: an der hohen Traufe)
-  const maxTiefe = dach.typ === 'pult' ? B : B / 2;
+  // Gauben enden spätestens am First (Pultdach: an der hohen Traufe); auf Walmseiten an der Dachmitte
+  const maxTiefe = (g: Gaube) => (g.seite >= 2 ? L / 2 : dach.typ === 'pult' ? B : B / 2);
+  const traufLaenge = (g: Gaube) => (g.seite >= 2 ? B : L);
   const upd = (i: number, patch: Partial<Gaube>) => onChange(gauben.map((g, k) => (k === i ? { ...g, ...patch } : g)));
-  const zweiSeiten = dach.typ !== 'pult';
+  const seiten: { id: GaubenSeite; label: string }[] =
+    dach.typ === 'pult'
+      ? []
+      : [
+          { id: 0, label: 'Traufseite 1' },
+          { id: 1, label: 'Traufseite 2' },
+          ...(hatWalmseiten(dach)
+            ? [
+                { id: 2 as const, label: 'Walmseite 1' },
+                { id: 3 as const, label: 'Walmseite 2' },
+              ]
+            : []),
+        ];
 
   return (
     <div className="gauben">
@@ -224,8 +237,8 @@ function GaubenEditor({ dach, points, onChange }: { dach: Dach; points: OutlineS
       {gauben.map((g, i) => {
         const m = gaubenMasse(g, dach);
         const warn: string[] = [];
-        if (g.vorne + m.tiefe > maxTiefe + 1e-6) warn.push('reicht über den First hinaus');
-        if (g.abstand < -1e-6 || g.abstand + g.breite > L + 1e-6) warn.push('ragt seitlich über das Dach hinaus');
+        if (g.vorne + m.tiefe > maxTiefe(g) + 1e-6) warn.push(g.seite >= 2 ? 'reicht über die Dachmitte hinaus' : 'reicht über den First hinaus');
+        if (g.abstand < -1e-6 || g.abstand + g.breite > traufLaenge(g) + 1e-6) warn.push('ragt seitlich über das Dach hinaus');
         if (g.typ === 'schlepp' && (g.neigung ?? 0) >= m.alpha) warn.push('Gaubendach muss flacher sein als das Hauptdach');
         return (
           <div key={i} className="gaube">
@@ -239,20 +252,23 @@ function GaubenEditor({ dach, points, onChange }: { dach: Dach; points: OutlineS
                   ))}
                 </select>
               </Field>
-              {zweiSeiten && (
+              {seiten.length > 0 && (
                 <Field label="Dachseite">
-                  <select value={g.seite} onChange={(e) => upd(i, { seite: e.target.value === '1' ? 1 : 0 })}>
-                    <option value={0}>Traufseite 1</option>
-                    <option value={1}>Traufseite 2</option>
+                  <select value={g.seite} onChange={(e) => upd(i, { seite: Number(e.target.value) as GaubenSeite })}>
+                    {seiten.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.label}
+                      </option>
+                    ))}
                   </select>
                 </Field>
               )}
             </div>
             <div className="field-row">
-              <Field label="Breite B [m]">
+              <Field label="Breite B [m]" hint="entlang der Traufe">
                 <NumberField value={g.breite} min={0.1} digits={3} onChange={(v) => v !== undefined && upd(i, { breite: v })} />
               </Field>
-              <Field label="Abstand vom Rand [m]" hint="in Firstrichtung">
+              <Field label="Abstand vom Rand [m]" hint="entlang der Traufe">
                 <NumberField value={g.abstand} min={0} digits={3} onChange={(v) => v !== undefined && upd(i, { abstand: v })} />
               </Field>
               <Field label="Abstand Traufe [m]" hint="waagerecht bis Vorderwand">

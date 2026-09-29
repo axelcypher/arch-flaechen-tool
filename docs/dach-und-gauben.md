@@ -42,13 +42,14 @@ Mit auf 5,38 m gerundeter Höhe käme man auf 243,39 m³.
 
 ## 2. Gauben
 
-Eine Gaube steht auf der Dachfläche einer Traufseite. Gezählt wird nur der Raum **über** der
-Dachfläche – der Teil darunter steckt bereits im Dachkörper.
+Eine Gaube steht auf einer Dachfläche – auf einer Traufseite oder, bei Walm- und Zeltdächern, auch
+auf einer Walmseite (Stirnseite). Gezählt wird nur der Raum **über** der Dachfläche – der Teil darunter
+steckt bereits im Dachkörper.
 
 | Größe | Bedeutung |
 |---|---|
-| α | Neigung der Hauptdachfläche (Mansarddach: untere, steile Fläche) |
-| B | Breite der Gaube (in Firstrichtung, Außenkante Wangen) |
+| α | Neigung der Dachfläche, auf der die Gaube steht (Walmseite: Walmneigung; Mansarddach: untere, steile Fläche) |
+| B | Breite der Gaube (entlang der Traufe, Außenkante Wangen) |
 | T | waagerechte Tiefe von der Vorderwand bis zum Anschluss an das Hauptdach |
 | β | Neigung des Gaubendachs (Schleppgaube) |
 | γ | Neigung des Gaubendachs (Satteldachgaube) |
@@ -103,12 +104,17 @@ Dach-Editor wird das Dach aus dem Modell in eine Dachform mit Formeln übersetzt
 obersten Abschluss eines Umrisses – nicht, wenn darüber ein Geschoss mit BGF liegt oder der BRI des
 Geschosses auf die Geschosshöhe begrenzt ist.
 
+0. **BGF des Dachgeschosses:** Wird ein Geschoss überwiegend von seinem eigenen Dach überdeckt, reicht
+   sein BGF-Umriss nicht nur bis zu den Drempel- bzw. Innenwänden, sondern bis dorthin, wo die Dachhaut
+   die Fußbodenebene schneidet – höchstens bis zum Umriss des Geschosses darunter (DIN 277: BGF bis zu
+   den Außenflächen der Hülle). Fast rechtwinklige Umrisse werden exakt rechtwinklig ausgerichtet
+   (Abweichungen bis 0,5°), damit ein Rechteck auch als Rechteck mit L × B gilt.
 1. **Dachhaut abtasten:** Über dem Umriss wird ein Raster gelegt (etwa 5 cm, bei großen Gebäuden
    entsprechend gröber). Für jede Zelle wird die oberste Dachebene des Modells bestimmt; gleiche Ebenen
    werden zusammengefasst.
 2. **Hauptdachflächen:** Das sind die Ebenen, die an der Traufe am tiefsten liegen. Eine große Gaube
    kann mehr Fläche haben als der Rest der Dachfläche, liegt an der Traufe aber höher. Daraus folgen
-   - die Firstrichtung (an den Wänden ausgerichtet),
+   - die Firstrichtung (an den Wänden ausgerichtet; beide Richtungen werden geprüft),
    - die Dachform, je nachdem, in welche Richtungen die Flächen fallen (Flach-, Pult-, Sattel-,
      Walm- oder Krüppelwalmdach),
    - Neigung und Walmneigung,
@@ -118,11 +124,14 @@ Geschosses auf die Geschosshöhe begrenzt ist.
      damit der Dachüberstand der Gaube nicht mitzählt. Ohne Wände (z. B. bei einer älteren Projektdatei
      ohne gespeicherte IFC-Datei) werden die Maße aus dem Gaubendach genommen und die Gaube ist mit
      „Maße aus dem Gaubendach“ gekennzeichnet.
+   - **Dachfläche:** die Fläche der Hauptdachform unter der Mitte der Gaube – Traufseite oder Walmseite.
    - **Art:** eine Fläche in Gefällerichtung → Schleppgaube (β), bei β ≈ 0 Flachdachgaube;
      zwei Flächen quer dazu → Satteldachgaube (γ, Wandhöhe).
    - **Tiefe:** aus der Höhe der Vorderwand, `T = hf / (tan α − tan β)`.
 4. **Kontrolle:** Übernommen wird das Ergebnis nur, wenn Dachform plus Gauben den Rauminhalt des
-   Modells auf **3 %** treffen. Sonst bleibt es beim Dach aus dem Modell (`A × hm`), und der
+   Modells auf **3 %** treffen. Passen mehrere Deutungen, gewinnt die, bei der die Hauptdachform am
+   meisten erklärt (kleinstes Gaubenvolumen – sonst ließe sich ein Satteldach als Walmdach mit
+   „Gauben“ in den Giebeldreiecken lesen), bei Gleichstand die mit dem First entlang der längeren Seite. Sonst bleibt es beim Dach aus dem Modell (`A × hm`), und der
    Importbericht bzw. der Dach-Editor nennt den Grund.
 
 Bauteile, deren Name „Gaube“ oder „Dormer“ enthält (z. B. Archicad-Bibliotheksobjekte, die als
@@ -132,9 +141,18 @@ Bauteile, deren Name „Gaube“ oder „Dormer“ enthält (z. B. Archicad-Bibl
 geneigte oder versetzte Dachflächen und L-/T-Grundrisse mit mehreren Firsten – den Umriss dann in
 Teilflächen mit je eigenem Dach aufteilen.
 
+### Traufhöhe und Dachaufbau
+
+Maßgebend ist die **Oberseite der Dachhaut** (DIN 277: BRI bis zu den Außenflächen). Liegt die
+Dachoberfläche an der Außenwand höher als der Fußboden des Dachgeschosses – etwa um die Dicke des
+Dachaufbaus, schräg gemessen –, erscheint dieser Teil als „Grundkörper bis Traufe“ (z. B. 0,255 m bei
+einem 45°-Dach mit rund 18 cm Aufbau). Eine Handrechnung, die das Dach ab Fußboden mit H = B/2 × tan α
+ansetzt, enthält diesen Anteil nicht.
+
 **Getestet** mit dem Archicad-Beispiel AC20-FZK-Haus (Satteldach 30°, Traufe 0,73 m, Abweichung zum
-Modell 0,0 %) sowie mit erzeugten Dachmodellen mit Dachüberstand (Walmdach mit Schleppgaube, Satteldach
-mit Satteldach- und Flachdachgaube). Ein echtes Modell mit Gauben war bisher nicht dabei.
+Modell 0,0 %), mit einem Archicad-Projekt mit Walmdach 45° und zwei Schleppgauben auf den Walmseiten
+(Abweichung 0,0 %) sowie mit erzeugten Dachmodellen mit Dachüberstand (Walmdach mit Schleppgauben auf
+Trauf- und Walmseiten, Satteldach mit Satteldach- und Flachdachgaube).
 
 ## Quellcode
 

@@ -367,10 +367,10 @@ export function roofStats(d: Dach, pts: Point[]): RoofStats {
   return { volumen: vol, dachvolumen: vol - area * d.traufhoehe, firsthoehe: maxH, frame };
 }
 
-/** Ist der Umriss genau das umschließende Rechteck in Firstrichtung? */
+/** Ist der Umriss das umschließende Rechteck in Firstrichtung? (Toleranz für gerundete Modellkoordinaten) */
 export function isFrameRect(fr: RoofFrame, area: number): boolean {
   const r = (fr.u1 - fr.u0) * (fr.v1 - fr.v0);
-  return Math.abs(r - area) <= 1e-6 * Math.max(1, r);
+  return Math.abs(r - area) <= 1e-4 * Math.max(1, r);
 }
 
 /** Fläche eines Kreisabschnitts mit Sehne s und Stich f */

@@ -1,6 +1,6 @@
 import { cleanupPolygon, fitEdges, simplifyClosed, traceOuterContour } from './detect';
 import type { Point } from './geometry';
-import { polygonArea, signedArea } from './geometry';
+import { pointInPolygon, polygonArea, signedArea } from './geometry';
 import { clipHalfPlane } from './roof';
 import type { IfcExtract, IfcMeshPart } from './ifcData';
 import type { DxfPolyline, Nutzungsgruppe, OutlineShape, Storey, VectorBackground } from './model';
@@ -42,13 +42,17 @@ const OUTLINE_TYPES = new Set([
   'IFCWALLELEMENTEDCASE',
   'IFCCOLUMN',
   'IFCCURTAINWALL',
-  'IFCWINDOW',
-  'IFCDOOR',
 ]);
+/** Öffnungen: schließen nur Wandlücken (z. B. raumhohe Fenster), bilden aber nie die Außenkante */
+const OPENING_TYPES = new Set(['IFCWINDOW', 'IFCDOOR']);
 /** nur als Teil einer Vorhangfassade (sonst z. B. Sparren im Dachüberstand) */
 const CURTAIN_PARTS = new Set(['IFCPLATE', 'IFCMEMBER']);
 /** Bauteile, die nach ihrem Namen eine Gaube sind */
 const GAUBE_NAME = /gaube|dormer/i;
+const istGaube = (e: IfcMeshPart) => GAUBE_NAME.test(e.name) || GAUBE_NAME.test(e.predefinedType);
+/** Dachbauteile; Gauben als Bibliotheksobjekt (z. B. Archicad → IfcBuildingElementProxy „Gaube“) gehören dazu */
+const isRoofPart = (e: IfcMeshPart) =>
+  e.type === 'IFCROOF' || (e.type === 'IFCSLAB' && e.predefinedType === 'ROOF') || (e.type === 'IFCCOVERING' && e.predefinedType === 'ROOFING') || istGaube(e);
 const isOutlinePart = (e: IfcMeshPart) => OUTLINE_TYPES.has(e.type) || (CURTAIN_PARTS.has(e.type) && e.parentType === 'IFCCURTAINWALL');
 
 export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResult {
@@ -57,8 +61,9 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
   const storeys: Storey[] = [];
   const storeyByIfcIndex = new Map<number, Storey>();
 
-  order.forEach((s, k) => {
-    const next = order[k + 1];
+  order.forEach((s) => {
+    // nächstes Geschoss mit höherer Kote (Geschosse auf gleicher Höhe, z. B. „Lageplan“, zählen nicht)
+    const next = order.find((o) => o.elevation > s.elevation + 1e-6);
     let h = next ? next.elevation - s.elevation : NaN;
     if (!next) {
       // oberstes Geschoss: Oberkante der Wände, sonst 3 m
@@ -144,11 +149,25 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
 
   // BGF-Umrisse
   if (o.outlines) {
-    order.forEach((s) => {
+    order.forEach((s, k) => {
       const st = storeyFor(s.i);
       const parts = x.elements.filter((e) => e.storey === s.i && isOutlinePart(e));
+      const openings = x.elements.filter((e) => e.storey === s.i && OPENING_TYPES.has(e.type)).map((e) => e.tris);
       const spaceTris = x.spaces.filter((sp) => sp.storey === s.i).map((sp) => sp.tris);
-      const outlines = outlinesFromParts(parts.map((p) => p.tris).concat(spaceTris));
+      const partTris = parts.map((p) => p.tris).concat(spaceTris);
+      let outlines = outlinesFromParts(partTris, openings);
+      // Dachgeschoss: BGF bis dorthin, wo die Dachhaut die Fußbodenebene schneidet (nicht nur bis zu den Drempel-/Innenwänden)
+      const below = k > 0 ? storeyFor(order[k - 1].i).shapes.filter((x): x is OutlineShape => x.kind === 'outline' && !x.subtract).map((x) => x.points) : [];
+      const dach = dachUeberFussboden(x.elements.filter((e) => e.storey === s.i && isRoofPart(e)), s.elevation);
+      if (outlines.length && below.length && dach.length && anteilUeberdeckt(outlines, dach) > 0.5) {
+        const vorher = outlines.reduce((a, q) => a + polygonArea(q), 0);
+        const erweitert = outlinesFromParts(partTris, openings, { flaechen: dach, innerhalb: below });
+        const nachher = erweitert.reduce((a, q) => a + polygonArea(q), 0);
+        if (nachher > vorher + 0.5) {
+          outlines = erweitert;
+          report.push(`${st.name}: BGF bis zur Dachhaut erweitert (+${fmt(nachher - vorher)} m² gegenüber den Wänden).`);
+        }
+      }
       outlines.forEach((pts, k) => {
         const ol: OutlineShape = createOutline(pts, outlines.length > 1 ? `BGF ${k + 1}` : 'BGF');
         st.shapes.unshift(ol);
@@ -160,11 +179,7 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
   // Dach aus Modell
   let dachModell: DachModell | undefined;
   if (o.roof) {
-    // Gauben als Bibliotheksobjekt (z. B. Archicad → IfcBuildingElementProxy „Gaube“) gehören mit zur Dachhaut
-    const istGaube = (e: IfcMeshPart) => GAUBE_NAME.test(e.name) || GAUBE_NAME.test(e.predefinedType);
-    const roofParts = x.elements.filter(
-      (e) => e.type === 'IFCROOF' || (e.type === 'IFCSLAB' && e.predefinedType === 'ROOF') || (e.type === 'IFCCOVERING' && e.predefinedType === 'ROOFING') || istGaube(e),
-    );
+    const roofParts = x.elements.filter(isRoofPart);
     const tris = upwardTriangles(roofParts);
     // Wände und Fenster zum Vermessen der Gauben
     const waende = o.dachform ? x.elements.filter((e) => e.type.startsWith('IFCWALL') || e.type === 'IFCWINDOW' || istGaube(e)).map((e) => e.tris) : [];
@@ -307,7 +322,13 @@ export function footprintFromTriangles(t: Float32Array): Point[] | null {
 
 /* ---------- BGF-Umriss aus Bauteilen ---------- */
 
-export function outlinesFromParts(parts: Float32Array[]): Point[][] {
+/**
+ * BGF-Außenkontur aus Wänden, Stützen und Raumkörpern.
+ * Fenster und Türen (openings) zählen nur dort, wo sie eine Lücke zwischen zwei Wandstücken schließen
+ * (raumhohe Öffnungen ohne Sturz); Fensterbänke und Rahmen vor bzw. hinter der Fassade bleiben außen vor,
+ * sonst entstehen Zacken in der Umrisslinie.
+ */
+export function outlinesFromParts(parts: Float32Array[], openings: Float32Array[] = [], erweiterung?: Erweiterung): Point[][] {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -318,6 +339,14 @@ export function outlinesFromParts(parts: Float32Array[]): Point[][] {
       maxX = Math.max(maxX, t[k]);
       minY = Math.min(minY, t[k + 1]);
       maxY = Math.max(maxY, t[k + 1]);
+    }
+  }
+  for (const pl of erweiterung?.innerhalb ?? []) {
+    for (const p of pl) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
     }
   }
   if (!Number.isFinite(minX)) return [];
@@ -343,6 +372,27 @@ export function outlinesFromParts(parts: Float32Array[]): Point[][] {
       const area2 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
       if (Math.abs(area2) > 1e-6) segs.push(t[i], t[i + 1], t[i + 3], t[i + 4], t[i + 3], t[i + 4], t[i + 6], t[i + 7], t[i + 6], t[i + 7], t[i], t[i + 1]);
     }
+  }
+  if (openings.length) bridgeOpenings(mask, w, h, openings, ox, oy, res);
+  if (erweiterung) {
+    // Flächen unter der Dachhaut, soweit sie innerhalb des Geschosses darunter liegen
+    const tmp = new Uint8Array(w * h);
+    for (const pl of erweiterung.flaechen) {
+      for (let k = 1; k + 1 < pl.length; k++) {
+        const P = (p: Point) => [(p.x - ox) / res, (p.y - oy) / res] as const;
+        const [ax, ay] = P(pl[0]);
+        const [bx, by] = P(pl[k]);
+        const [cx, cy] = P(pl[k + 1]);
+        fillTriangle(tmp, w, h, ax, ay, bx, by, cx, cy);
+      }
+    }
+    for (let q = 0; q < w * h; q++) {
+      if (!tmp[q] || mask[q]) continue;
+      const c = { x: ox + ((q % w) + 0.5) * res, y: oy + (Math.floor(q / w) + 0.5) * res };
+      if (erweiterung.innerhalb.some((pl) => pointInPolygon(c, pl))) mask[q] = 1;
+    }
+    // Kanten des Geschosses darunter zum Einpassen
+    for (const pl of erweiterung.innerhalb) for (let i = 0; i < pl.length; i++) segs.push(pl[i].x, pl[i].y, pl[(i + 1) % pl.length].x, pl[(i + 1) % pl.length].y);
   }
   // Löcher füllen: alles, was nicht von außen erreichbar ist, gehört zum Gebäude
   const outside = new Uint8Array(w * h);
@@ -391,9 +441,144 @@ export function outlinesFromParts(parts: Float32Array[]): Point[][] {
     const world = contour.map(([px, py]) => ({ x: ox + px * res, y: oy + py * res }));
     const simple = simplifyClosed(world, res * 1.6);
     const fitted = cleanupPolygon(fitEdges(simple, [grid], Math.max(res * 2.5, 0.02), res));
-    if (fitted.length >= 3) result.push(orientCw(fitted.map((p) => ({ x: round(p.x, 4), y: round(p.y, 4) }))));
+    const eben = rechtwinklig(fitted);
+    if (eben.length >= 3) result.push(orientCw(eben.map((p) => ({ x: round(p.x, 4), y: round(p.y, 4) }))));
   }
   return result.sort((a, b) => polygonArea(b) - polygonArea(a));
+}
+
+export interface Erweiterung {
+  /** Grundriss der Dachflächen, soweit die Dachhaut über der Fußbodenebene liegt */
+  flaechen: Point[][];
+  /** Umrisse des Geschosses darunter (Grenze der Erweiterung) */
+  innerhalb: Point[][];
+}
+
+/** Teile der Dachflächen (Grundriss), deren Dachhaut auf oder über dem Fußboden (absolute Höhe) liegt – 2 cm Toleranz */
+export function dachUeberFussboden(roofParts: IfcMeshPart[], floorZ: number): Point[][] {
+  const t = upwardTriangles(roofParts);
+  const out: Point[][] = [];
+  for (let i = 0; i + 8 < t.length; i += 9) {
+    const [x1, y1, z1, x2, y2, z2, x3, y3, z3] = t.slice(i, i + 9);
+    const det = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1);
+    if (Math.abs(det) < 1e-9) continue;
+    const a = ((z2 - z1) * (y3 - y1) - (z3 - z1) * (y2 - y1)) / det;
+    const b = ((z3 - z1) * (x2 - x1) - (z2 - z1) * (x3 - x1)) / det;
+    const c = z1 - a * x1 - b * y1;
+    // z ≥ floorZ − 0,02  ⇔  (floorZ − 0,02) − (a·x + b·y + c) ≤ 0
+    const poly = clipHalfPlane(
+      [
+        { x: x1, y: y1 },
+        { x: x2, y: y2 },
+        { x: x3, y: y3 },
+      ],
+      [-a, -b, floorZ - 0.02 - c],
+    );
+    if (poly.length >= 3) out.push(poly);
+  }
+  return out;
+}
+
+/** Anteil der Umrissfläche, über dem eine der Flächen liegt (Stichproben im 25-cm-Raster) */
+function anteilUeberdeckt(outlines: Point[][], flaechen: Point[][]): number {
+  let n = 0;
+  let hit = 0;
+  for (const pl of outlines) {
+    const xs = pl.map((p) => p.x);
+    const ys = pl.map((p) => p.y);
+    for (let x = Math.min(...xs) + 0.125; x < Math.max(...xs); x += 0.25) {
+      for (let y = Math.min(...ys) + 0.125; y < Math.max(...ys); y += 0.25) {
+        const p = { x, y };
+        if (!pointInPolygon(p, pl)) continue;
+        n++;
+        if (flaechen.some((f) => pointInPolygon(p, f))) hit++;
+      }
+    }
+  }
+  return n ? hit / n : 0;
+}
+
+/**
+ * Kanten, die höchstens tolDeg von der Hauptrichtung (längste Kante) bzw. der Senkrechten dazu abweichen,
+ * exakt ausrichten und die Ecken neu schneiden. Modelle haben oft Abweichungen im Millimeterbereich –
+ * so wird ein Rechteck auch als Rechteck erkannt (Dachformeln, L × B).
+ */
+export function rechtwinklig(pts: Point[], tolDeg = 0.5): Point[] {
+  const n = pts.length;
+  if (n < 3) return pts;
+  const dir = (a: Point, b: Point) => Math.atan2(b.y - a.y, b.x - a.x);
+  let longest = 0;
+  let haupt = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > longest) {
+      longest = len;
+      haupt = dir(a, b);
+    }
+  }
+  const tol = (tolDeg * Math.PI) / 180;
+  // Kante als Gerade: Punkt (Mitte) + Richtung
+  const lines = pts.map((a, i) => {
+    const b = pts[(i + 1) % n];
+    let r = dir(a, b);
+    const k = Math.round((r - haupt) / (Math.PI / 2));
+    const snapped = haupt + (k * Math.PI) / 2;
+    if (Math.abs(r - snapped) <= tol) r = snapped;
+    return { p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: { x: Math.cos(r), y: Math.sin(r) } };
+  });
+  const out: Point[] = [];
+  for (let i = 0; i < n; i++) {
+    const l1 = lines[(i - 1 + n) % n];
+    const l2 = lines[i];
+    const den = l1.d.x * l2.d.y - l1.d.y * l2.d.x;
+    if (Math.abs(den) < 1e-9) {
+      out.push(pts[i]);
+      continue;
+    }
+    const t = ((l2.p.x - l1.p.x) * l2.d.y - (l2.p.y - l1.p.y) * l2.d.x) / den;
+    const q = { x: l1.p.x + l1.d.x * t, y: l1.p.y + l1.d.y * t };
+    // nur übernehmen, wenn sich die Ecke dabei kaum verschiebt
+    out.push(Math.hypot(q.x - pts[i].x, q.y - pts[i].y) < 0.05 ? q : pts[i]);
+  }
+  return out;
+}
+
+/** größte Öffnungsbreite [m], die eine Öffnung zwischen zwei Wandstücken überbrücken darf */
+const MAX_OEFFNUNG = 8;
+
+/**
+ * Zellen von Fenstern/Türen nur übernehmen, wenn sie in Zeilen- oder Spaltenrichtung auf beiden Seiten
+ * innerhalb von MAX_OEFFNUNG an Wand grenzen – also in der Wandflucht liegen und eine Lücke schließen.
+ */
+function bridgeOpenings(mask: Uint8Array, w: number, h: number, openings: Float32Array[], ox: number, oy: number, res: number) {
+  const open = new Uint8Array(w * h);
+  for (const t of openings) {
+    for (let i = 0; i + 8 < t.length; i += 9) {
+      fillTriangle(open, w, h, (t[i] - ox) / res, (t[i + 1] - oy) / res, (t[i + 3] - ox) / res, (t[i + 4] - oy) / res, (t[i + 6] - ox) / res, (t[i + 7] - oy) / res);
+    }
+  }
+  const reach = Math.ceil(MAX_OEFFNUNG / res);
+  const hit = (x: number, y: number, dx: number, dy: number) => {
+    for (let k = 1; k <= reach; k++) {
+      const xx = x + dx * k;
+      const yy = y + dy * k;
+      if (xx < 0 || yy < 0 || xx >= w || yy >= h) return false;
+      const q = yy * w + xx;
+      if (mask[q]) return true;
+      if (!open[q]) return false; // Lücke endet außerhalb der Öffnung → keine Wandflucht
+    }
+    return false;
+  };
+  const add: number[] = [];
+  for (let q = 0; q < w * h; q++) {
+    if (!open[q] || mask[q]) continue;
+    const x = q % w;
+    const y = (q - x) / w;
+    if ((hit(x, y, -1, 0) && hit(x, y, 1, 0)) || (hit(x, y, 0, -1) && hit(x, y, 0, 1))) add.push(q);
+  }
+  for (const q of add) mask[q] = 1;
 }
 
 function fillTriangle(mask: Uint8Array, w: number, h: number, ax: number, ay: number, bx: number, by: number, cx: number, cy: number) {

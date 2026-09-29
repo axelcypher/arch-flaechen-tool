@@ -95,7 +95,10 @@ Traufhöhe), bei geneigtem Dach ein **Dachkörper** als Ganzes und je **Gaube** 
 h = Wandhöhe über der Dachfläche) – sowie die Filter `[normal]`, `[dg]`, `[dach]`, `[gaube]`.
 Herleitung der Formeln: [Dachform und Gauben](dach-und-gauben.md).
 
-Ein Geschoss gilt automatisch als Dachgeschoss, sobald einer seiner BGF-Umrisse ein geneigtes Dach trägt.
+Ein Geschoss gilt automatisch als Dachgeschoss, sobald einer seiner BGF-Umrisse eine geneigte Dachform
+trägt – ein „Dach aus Modell“ zählt dafür nicht (es steht oft auch über Vordächern oder Anbauten unterer
+Geschosse). Ein Körper „bis zur Dachhaut aus dem Modell“ erscheint als Grundkörper mit mittlerer Höhe,
+also im Normalgeschoss-Block als Höhe × BGF.
 In den Geschosseigenschaften lässt sich das unter **Geschossart** festlegen (automatisch / Normalgeschoss /
 Dachgeschoss). Der Filter wirkt auf `geschoss`, `raum`, `bri` und `koerper`.
 

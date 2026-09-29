@@ -134,7 +134,7 @@ const GAUBEN_NUM_KEYS = ['tiefe', 'neigung', 'wandhoehe', 'dachneigung'] as cons
 function normalizeGaube(g: Record<string, unknown>): Gaube {
   const out: Gaube = {
     typ: oneOf<GaubenTyp>(g.typ, ['schlepp', 'flach', 'sattel'], 'schlepp'),
-    seite: g.seite === 1 ? 1 : 0,
+    seite: g.seite === 1 || g.seite === 2 || g.seite === 3 ? g.seite : 0,
     abstand: num(g.abstand, 0),
     breite: num(g.breite, 1),
     vorne: num(g.vorne, 0),

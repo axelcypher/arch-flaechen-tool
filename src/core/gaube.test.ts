@@ -109,11 +109,24 @@ function modell(d: Dach, pts: Point[], ueberstand = 0.5): { m: DachModell; waend
     for (let k = 1; k + 1 < poly.length; k++) for (const q of [poly[0], poly[k], poly[k + 1]]) tris.push(q.x, q.y, q.z);
   };
   for (const pc of clippedPieces(bigD, big)) fan(pc.poly.map((q) => ({ ...q, z: pc.f[0] * q.x + pc.f[1] * q.y + pc.f[2] })));
-  // Gaubendächer mit 0,3 m Überstand seitlich
+  // Gaubendächer mit 0,3 m Überstand seitlich (entlang der Traufe der Gaube = Richtung der ersten Kante)
   const gf = gaubenFaces(d, fr);
   for (const top of gf.tops) {
     const cx = top.reduce((s, q) => s + q.x, 0) / top.length;
-    fan(top.map((q) => ({ ...q, x: q.x + Math.sign(q.x - cx) * 0.3 })));
+    const cy = top.reduce((s, q) => s + q.y, 0) / top.length;
+    const len = Math.hypot(top[1].x - top[0].x, top[1].y - top[0].y);
+    const [dx, dy] = [(top[1].x - top[0].x) / len, (top[1].y - top[0].y) / len];
+    // Höhe in der Ebene der Dachfläche weiterführen
+    const [p0, p1, p2] = top;
+    const det = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+    const A = ((p1.z - p0.z) * (p2.y - p0.y) - (p2.z - p0.z) * (p1.y - p0.y)) / det;
+    const Bb = ((p2.z - p0.z) * (p1.x - p0.x) - (p1.z - p0.z) * (p2.x - p0.x)) / det;
+    fan(top.map((q) => {
+      const k = Math.sign((q.x - cx) * dx + (q.y - cy) * dy) * 0.3;
+      const x = q.x + k * dx;
+      const y = q.y + k * dy;
+      return { x, y, z: q.z + A * (x - q.x) + Bb * (y - q.y) };
+    }));
   }
   return { m: { name: 'Test', triangles: tris }, waende: gf.sides.map((s) => s.flatMap((q) => [q.x, q.y, q.z])) };
 }
@@ -150,6 +163,31 @@ describe('Dachform und Gauben aus dem Modell', () => {
     expect(sg.wandhoehe).toBeCloseTo(1.1, 1);
     expect(sg.breite).toBeCloseTo(2.4, 1);
     expect(e.abweichung).toBeLessThan(0.015);
+  });
+
+  it('Gauben auf den Walmseiten (wie HSA: große Schleppgaube auf der Stirnseite)', () => {
+    // First entlang der 12-m-Seite, Gauben auf beiden Walmflächen
+    const d: Dach = {
+      ...walm,
+      traufhoehe: 0.25,
+      gauben: [
+        { typ: 'schlepp', seite: 3, abstand: 3.3, breite: 4.12, vorne: 0, tiefe: 3.85, neigung: 25 },
+        { typ: 'schlepp', seite: 2, abstand: 5, breite: 1.0, vorne: 0, tiefe: 0.8, neigung: 15 },
+      ],
+    };
+    const { m, waende } = modell(d, rect);
+    const e = dachAusModell(m, rect, 0, waende);
+    if (!e.dach) throw new Error(e.grund);
+    expect(e.dach).toMatchObject({ typ: 'walm', neigung: 45, neigungWalm: 45 });
+    const g = [...e.dach.gauben!].sort((a, b) => b.breite - a.breite);
+    expect(g.map((x) => [x.typ, x.seite])).toEqual([
+      ['schlepp', 3],
+      ['schlepp', 2],
+    ]);
+    expect(g[0].breite).toBeCloseTo(4.12, 1);
+    expect(g[0].tiefe).toBeCloseTo(3.85, 1);
+    expect(g[0].neigung).toBeCloseTo(25, 1);
+    expect(e.abweichung).toBeLessThan(0.01);
   });
 
   it('ohne Gauben: reines Satteldach', () => {

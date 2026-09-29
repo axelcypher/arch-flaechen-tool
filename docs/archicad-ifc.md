@@ -14,6 +14,20 @@ Graphisoft und lassen sich außerhalb von Archicad nicht lesen. Der verlässlich
 | Dach, Dachdecken | `IfcRoof`, `IfcSlab` (ROOF) | Dachhaut für den BRI („Dach aus Modell“) |
 | gesamtes Modell | Bauteilgeometrie | Geschossschnitt (Standard 1,00 m über Fußboden) als hinterlegter Vektorplan je Geschoss |
 
+## BGF-Umriss aus den Bauteilen
+
+Die Außenkontur je Geschoss entsteht aus Wänden, Stützen, Vorhangfassaden und Zonen. **Fenster und
+Türen** zählen nur dort, wo sie eine Lücke zwischen zwei Wandstücken schließen (raumhohe Öffnungen ohne
+Sturz) – Fensterbänke und Rahmen vor bzw. hinter der Fassade erzeugen so keine Zacken mehr.
+Fast rechtwinklige Umrisse werden exakt rechtwinklig ausgerichtet.
+
+Beim **Dachgeschoss** reicht der Umriss bis dorthin, wo die Dachhaut die Fußbodenebene schneidet
+(höchstens bis zum Umriss des Geschosses darunter), nicht nur bis zu Drempel- oder Innenwänden – siehe
+[Dachform und Gauben](dach-und-gauben.md).
+
+Geschosshöhen ergeben sich aus der Kote des nächsten *höher* liegenden Geschosses; Geschosse auf
+gleicher Kote (z. B. „Lageplan“ neben „UG“) zählen dabei nicht.
+
 ## BGF und BRI bei Dachgeschossen
 
 Die **BGF** wird je Grundrissebene (Geschoss) auf Fußbodenhöhe ermittelt. Ein Geschoss ohne Wände

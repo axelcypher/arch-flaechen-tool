@@ -5,3 +5,7 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .DS_Store
 *.log
+
+# IFC-Modelle aus Projekten (nur lokal zum Testen) – das kleine Test-Fixture bleibt versioniert
+*.ifc
+!src/core/__fixtures__/*.ifc

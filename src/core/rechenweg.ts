@@ -539,7 +539,8 @@ function dachKoerper(s: OutlineShape, dachTeile: Teil[], base: KoerperBasis, sig
   const df = fr && isFrameRect(fr, A) ? dachFormel(d, L, B) : null;
   const common = {
     ...base,
-    art: 'dach' as const,
+    // Dach aus dem Modell: ein Körper vom Fußboden bis zur Dachhaut – wie ein Grundkörper mit mittlerer Höhe
+    art: d.typ === 'modell' ? ('grundkoerper' as const) : ('dach' as const),
     bezeichnung: d.typ === 'modell' ? 'Körper bis Dachhaut (IFC-Modell)' : (DACH_TYPEN.find((x) => x.id === d.typ)?.label ?? 'Dach'),
     neigung: d.typ === 'modell' ? undefined : d.neigung,
     volumen: sign * V,
