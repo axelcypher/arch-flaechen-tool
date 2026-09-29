@@ -222,3 +222,52 @@ describe('IFC: Geschossschnitt als Plan', () => {
     expect(r[0].pts.length / 2).toBe(4);
   });
 });
+
+describe('IFC: Lageplan-Geschoss', () => {
+  function mitLageplan(): IfcExtract {
+    return {
+      schema: 'IFC4',
+      projectName: 'Test',
+      // Lageplan auf Höhe des UG – im IFC oft vor oder nach dem UG einsortiert
+      storeys: [
+        { name: 'Lageplan', elevation: -2.5, expressId: 9 },
+        { name: 'UG', elevation: -2.5, expressId: 1 },
+        { name: 'EG', elevation: 0, expressId: 2 },
+      ],
+      spaces: [],
+      elements: [
+        part('IFCWALL', 1, ring(-2.5, 0)),
+        part('IFCWALL', 2, ring(0, 3)),
+        { ...part('IFCSLAB', 0, box(10, 0, 13, 8, -0.3, -0.1)), name: 'Zufahrt Rasengitter' },
+        { ...part('IFCSLAB', 0, box(-4, 0, 0, 5, -0.25, -0.05)), name: 'Terrasse' },
+        { ...part('IFCSLAB', 0, box(30, 0, 40, 10, -0.2, 0)), name: 'Rasen Nachbar' },
+        { ...part('IFCSITE', -1, box(0, 8, 10, 12, -0.4, -0.2)), name: 'Gelände' },
+      ],
+      offset: { x: 0, y: 0 },
+    };
+  }
+
+  it('wird kein Gebäudegeschoss, seine Bauteile werden Lageplan-Flächen', () => {
+    const r = buildFromIfc(mitLageplan(), { rooms: false, outlines: true, roof: false, wohnflaeche: false });
+    const lp = r.storeys.find((s) => s.lageplan)!;
+    const ug = r.storeys.find((s) => s.name === 'UG')!;
+    expect(lp.name).toBe('Lageplan');
+    expect(lp.shapes.every((s) => s.kind === 'flaeche')).toBe(true);
+    // UG-Höhe bis zum EG, nicht 0 wegen des Lageplans auf gleicher Kote
+    expect(ug.hoehe).toBeCloseTo(2.5, 6);
+    const f = lp.shapes.filter((s) => s.kind === 'flaeche');
+    const byName = (n: string) => f.find((s) => s.name === n)!;
+    expect(byName('Zufahrt Rasengitter')).toMatchObject({ nutzung: 'zufahrt', versiegelung: 'teil' });
+    expect(byName('Terrasse')).toMatchObject({ nutzung: 'terrasse', versiegelung: 'voll' });
+    expect(byName('Terrasse').kind === 'flaeche' && byName('Terrasse').hoehe).toBeCloseTo(-0.05, 3);
+    expect(byName('Gelände')).toBeDefined();
+    // ohne Verbindung zum Gebäude: Nachbar
+    expect(byName('Rasen Nachbar')).toMatchObject({ nachbar: true, versiegelung: 'gruen' });
+    expect(byName('Zufahrt Rasengitter').kind === 'flaeche' && byName('Zufahrt Rasengitter').nachbar).toBeFalsy();
+    const p = createProject();
+    p.storeys = r.storeys;
+    // Lageplan zählt nicht zu BGF und BRI
+    expect(computeProject(p).storeys.map((s) => s.name)).toEqual(['UG', 'EG']);
+    expect(r.report.some((z) => z.includes('Lageplan-Flächen übernommen') && z.includes('Nachbargrundstück'))).toBe(true);
+  });
+});

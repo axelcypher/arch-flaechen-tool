@@ -52,7 +52,7 @@ interface EditorState {
   reportOpen: boolean;
   excelOpen: boolean;
   detect: DetectSettings;
-  mainView: '2d' | '3d';
+  mainView: '2d' | '3d' | 'grz';
   ifcModel: IfcReference | null;
 
   /** Änderung mit Undo-Schritt */
@@ -75,7 +75,7 @@ interface EditorState {
   requestFit: () => void;
   setReportOpen: (open: boolean) => void;
   setExcelOpen: (open: boolean) => void;
-  setMainView: (v: '2d' | '3d') => void;
+  setMainView: (v: '2d' | '3d' | 'grz') => void;
   setIfcModel: (m: IfcReference | null) => void;
   setDetect: (d: Partial<DetectSettings>) => void;
 }

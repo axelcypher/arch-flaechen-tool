@@ -5,6 +5,7 @@ import { computeProject } from '../core/calc';
 import { fmt2 } from '../core/format';
 import type { OutlineShape, Project } from '../core/model';
 import { storeyElevations } from '../core/model';
+import { versiegelungInfo } from '../core/lageplan';
 import { nutzungInfo } from '../core/norms';
 import type { Point3 } from '../core/roof';
 import { solidFaces } from '../core/roof';
@@ -146,6 +147,19 @@ export default function View3D() {
             new THREE.LineBasicMaterial({ color: sel ? 0xb35900 : s.subtract ? 0x8e2b20 : 0x1d3f96 }),
           );
           t.content.add(edges);
+        } else if (s.kind === 'flaeche') {
+          // Lageplan-Fläche flach auf Höhe ihrer Oberfläche
+          const shape = new THREE.Shape(s.points.map((p) => new THREE.Vector2(p.x, p.y)));
+          const geo = new THREE.ShapeGeometry(shape);
+          geo.rotateX(Math.PI / 2);
+          geo.translate(0, (s.hoehe ?? z0) + gap * i + 0.01, 0);
+          const mat = new THREE.MeshStandardMaterial({
+            color: versiegelungInfo(s.versiegelung).color,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: s.nachbar ? 0.35 : 0.8,
+          });
+          t.content.add(new THREE.Mesh(geo, mat));
         } else if (showRooms) {
           const shape = new THREE.Shape(s.points.map((p) => new THREE.Vector2(p.x, p.y)));
           const geo = new THREE.ShapeGeometry(shape);

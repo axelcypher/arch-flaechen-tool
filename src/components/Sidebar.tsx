@@ -3,6 +3,7 @@ import { computeStorey } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
+import { nutzungLabel, versiegelungInfo } from '../core/lageplan';
 import { addStorey, duplicateStorey, moveStorey, removeStorey, useActiveStorey, useEditor } from '../store/store';
 import { Field, NumberField } from './fields';
 import { ProjektInfo } from './ProjektDialog';
@@ -17,6 +18,7 @@ export function Sidebar() {
 
   const outlines = storey.shapes.filter((s) => s.kind === 'outline');
   const rooms = storey.shapes.filter((s) => s.kind === 'room');
+  const flaechen = storey.shapes.filter((s) => s.kind === 'flaeche');
 
   return (
     <aside className="sidebar sidebar-left">
@@ -123,6 +125,20 @@ export function Sidebar() {
               <span className="num">{fmt2(shapeArea(s) * (s.subtract ? -1 : 1))}</span>
             </li>
           ))}
+        </ul>
+        {flaechen.length > 0 && <h3>Lageplan-Flächen</h3>}
+        <ul className="list shape-list">
+          {flaechen.map((s) =>
+            s.kind === 'flaeche' ? (
+              <li key={s.id} className={s.id === selectedId ? 'active' : ''} onClick={() => st.select(s.id)}>
+                <span className="swatch" style={{ background: versiegelungInfo(s.versiegelung).color, opacity: s.nachbar ? 0.4 : 1 }} />
+                <span className="grow-text">
+                  {s.name} <small>{s.nachbar ? 'Nachbar' : nutzungLabel(s.nutzung)}</small>
+                </span>
+                <span className="num">{fmt2(shapeArea(s))}</span>
+              </li>
+            ) : null,
+          )}
         </ul>
         {rooms.length > 0 && <h3>Räume</h3>}
         <ul className="list shape-list">

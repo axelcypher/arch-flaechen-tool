@@ -47,6 +47,9 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
   Maßstabsleiste, Legende, optional mit Hintergrundplan) und Raumliste je Geschoss
 - **Excel-Export** (.xlsx) im Standardlayout oder mit **eigener Vorlage** – siehe [docs/excel-vorlagen.md](docs/excel-vorlagen.md)
 - **CSV-Export** (Excel, Dezimalkomma)
+- **GRZ/GFZ-Nachweis** im eigenen Tab: GRZ I/II, GFZ und Vollgeschosse nach der BauNVO-Fassung und dem
+  Vollgeschossbegriff der BauO NRW, die für das Datum des Bebauungsplans gelten (1962 bis heute); Lageplan-Geschoss
+  mit Flächen nach Nutzung und Versiegelung, Flächenbilanz – siehe [docs/grz-gfz.md](docs/grz-gfz.md)
 - **Projektdaten** (Projektcode, Adresse, Grundstück mit Gemarkung/Flur/Flurstück, Bauherr mit beliebig vielen
   E-Mail-Adressen und Telefonnummern) im Dialog; als Platzhalter für Excel-Vorlagen (`{{bauherr.name}}` …)
 - Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)

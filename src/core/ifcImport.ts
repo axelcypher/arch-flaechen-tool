@@ -1,10 +1,11 @@
 import { cleanupPolygon, fitEdges, simplifyClosed, traceOuterContour } from './detect';
 import type { Point } from './geometry';
-import { pointInPolygon, polygonArea, signedArea } from './geometry';
+import { distanceToEdges, pointInPolygon, polygonArea, signedArea } from './geometry';
+import { nutzungAusText, versiegelungAusText } from './lageplan';
 import { clipHalfPlane } from './roof';
 import type { IfcExtract, IfcMeshPart } from './ifcData';
-import type { DxfPolyline, Nutzungsgruppe, OutlineShape, Storey, VectorBackground } from './model';
-import { createOutline, createProject, createRoom, createStorey } from './model';
+import type { DxfPolyline, FlaecheShape, Nutzungsgruppe, OutlineShape, Storey, VectorBackground } from './model';
+import { createFlaeche, createOutline, createProject, createRoom, createStorey } from './model';
 import { modellRoofParams } from './calc';
 import type { DachModell } from './roofMesh';
 import { meshRoofStats } from './roofMesh';
@@ -55,15 +56,27 @@ const isRoofPart = (e: IfcMeshPart) =>
   e.type === 'IFCROOF' || (e.type === 'IFCSLAB' && e.predefinedType === 'ROOF') || (e.type === 'IFCCOVERING' && e.predefinedType === 'ROOFING') || istGaube(e);
 const isOutlinePart = (e: IfcMeshPart) => OUTLINE_TYPES.has(e.type) || (CURTAIN_PARTS.has(e.type) && e.parentType === 'IFCCURTAINWALL');
 
+/** Geschoss, in dem der Lageplan gezeichnet ist (Archicad: eigenes Geschoss, meist auf Höhe des UG) */
+export const LAGEPLAN_NAME = /lageplan/i;
+
 export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResult {
   const report: string[] = [];
-  const order = x.storeys.map((s, i) => ({ ...s, i })).sort((a, b) => a.elevation - b.elevation);
+  const order = x.storeys.map((s, i) => ({ ...s, i, lageplan: LAGEPLAN_NAME.test(s.name) })).sort((a, b) => a.elevation - b.elevation);
   const storeys: Storey[] = [];
   const storeyByIfcIndex = new Map<number, Storey>();
 
   order.forEach((s) => {
-    // nächstes Geschoss mit höherer Kote (Geschosse auf gleicher Höhe, z. B. „Lageplan“, zählen nicht)
-    const next = order.find((o) => o.elevation > s.elevation + 1e-6);
+    if (s.lageplan) {
+      // kein Gebäudegeschoss: keine Höhe, keine BGF
+      const st = createStorey(s.name, 0);
+      st.elevation = round(s.elevation, 3);
+      st.lageplan = true;
+      storeys.push(st);
+      storeyByIfcIndex.set(s.i, st);
+      return;
+    }
+    // nächstes Geschoss mit höherer Kote (Geschosse auf gleicher Höhe und der Lageplan zählen nicht)
+    const next = order.find((o) => !o.lageplan && o.elevation > s.elevation + 1e-6);
     let h = next ? next.elevation - s.elevation : NaN;
     if (!next) {
       // oberstes Geschoss: Oberkante der Wände, sonst 3 m
@@ -107,6 +120,7 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
     let putz = 0;
     let keineWofl = 0;
     for (const sp of x.spaces) {
+      if (storeyFor(sp.storey).lageplan) continue; // Zonen im Lageplan werden Lageplan-Flächen
       const pts = footprintFromTriangles(sp.tris);
       if (!pts) {
         report.push(`Raum „${sp.longName || sp.name}“: Grundfläche konnte nicht ermittelt werden.`);
@@ -149,7 +163,8 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
 
   // BGF-Umrisse
   if (o.outlines) {
-    order.forEach((s, k) => {
+    const gebaeude = order.filter((s) => !s.lageplan);
+    gebaeude.forEach((s, k) => {
       const st = storeyFor(s.i);
       const parts = x.elements.filter((e) => e.storey === s.i && isOutlinePart(e));
       const openings = x.elements.filter((e) => e.storey === s.i && OPENING_TYPES.has(e.type)).map((e) => e.tris);
@@ -157,7 +172,7 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
       const partTris = parts.map((p) => p.tris).concat(spaceTris);
       let outlines = outlinesFromParts(partTris, openings);
       // Dachgeschoss: BGF bis dorthin, wo die Dachhaut die Fußbodenebene schneidet (nicht nur bis zu den Drempel-/Innenwänden)
-      const below = k > 0 ? storeyFor(order[k - 1].i).shapes.filter((x): x is OutlineShape => x.kind === 'outline' && !x.subtract).map((x) => x.points) : [];
+      const below = k > 0 ? storeyFor(gebaeude[k - 1].i).shapes.filter((x): x is OutlineShape => x.kind === 'outline' && !x.subtract).map((x) => x.points) : [];
       const dach = dachUeberFussboden(x.elements.filter((e) => e.storey === s.i && isRoofPart(e)), s.elevation);
       if (outlines.length && below.length && dach.length && anteilUeberdeckt(outlines, dach) > 0.5) {
         const vorher = outlines.reduce((a, q) => a + polygonArea(q), 0);
@@ -209,7 +224,7 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
       });
       // Geschosse ohne BGF (z. B. Spitzboden/Dachspitze als eigenes Geschoss)
       for (const st of storeys) {
-        if (!st.shapes.some((s) => s.kind === 'outline')) {
+        if (!st.lageplan && !st.shapes.some((s) => s.kind === 'outline')) {
           report.push(`${st.name}: ohne BGF-Umriss – der Rauminhalt darüber (z. B. Dachspitze) wird dem Geschoss darunter bis zur Dachhaut zugerechnet.`);
         }
       }
@@ -217,7 +232,112 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
     } else report.push('Keine Dachbauteile (IfcRoof, IfcSlab.ROOF) gefunden – Dachform bei Bedarf manuell wählen.');
   }
 
+  // Lageplan-Flächen: Bauteile und Zonen im Lageplan-Geschoss sowie das IFC-Gelände (IfcSite)
+  lageplanFlaechen(x, storeys, storeyFor, report);
+
   return { storeys, dachModell, report };
+}
+
+/* ---------- Lageplan ---------- */
+
+function lageplanFlaechen(x: IfcExtract, storeys: Storey[], storeyFor: (i: number) => Storey, report: string[]) {
+  const quellen: { name: string; text: string; tris: ArrayLike<number> }[] = [];
+  for (const e of x.elements) {
+    const imLageplan = e.storey >= 0 && storeyFor(e.storey).lageplan;
+    if (!(imLageplan || e.type === 'IFCSITE')) continue;
+    if (e.type.startsWith('IFCFURNISHING') || e.type === 'IFCOPENINGELEMENT') continue;
+    quellen.push({ name: e.name || e.type, text: `${e.name} ${e.predefinedType} ${e.type === 'IFCSITE' ? '' : e.type}`, tris: e.tris });
+  }
+  for (const sp of x.spaces) {
+    if (!storeyFor(sp.storey).lageplan) continue;
+    quellen.push({ name: sp.longName || sp.name, text: `${sp.name} ${sp.longName}`, tris: sp.tris });
+  }
+  if (!quellen.length) return;
+
+  let lp = storeys.find((s) => s.lageplan);
+  if (!lp) {
+    // IFC-Gelände ohne eigenes Lageplan-Geschoss
+    lp = createStorey('Lageplan', 0);
+    lp.lageplan = true;
+    lp.elevation = Math.min(...storeys.map((s) => s.elevation ?? 0));
+    storeys.unshift(lp);
+  }
+  const flaechen: FlaecheShape[] = [];
+  for (const q of quellen) {
+    const tris = Float32Array.from(q.tris as ArrayLike<number>);
+    const hoehe = oberflaechenHoehe(tris);
+    for (const pts of outlinesFromParts([tris])) {
+      if (polygonArea(pts) < 0.2) continue;
+      const nutzung = nutzungAusText(q.text);
+      flaechen.push({ ...createFlaeche(pts, q.name), nutzung, versiegelung: versiegelungAusText(q.text, nutzung), ...(hoehe !== undefined ? { hoehe: round(hoehe, 3) } : {}) });
+    }
+  }
+  // Nachbargrundstücke: Flächen ohne Verbindung zum Gebäude (auch über andere Flächen)
+  const haus = storeys.filter((s) => !s.lageplan).flatMap((s) => s.shapes.filter((sh) => sh.kind === 'outline' && !sh.subtract).map((sh) => sh.points));
+  let nachbarn = 0;
+  if (haus.length) {
+    const eigen = new Set<number>();
+    const queue: Point[][] = [...haus];
+    while (queue.length) {
+      const a = queue.pop()!;
+      flaechen.forEach((f, i) => {
+        if (!eigen.has(i) && beruehren(a, f.points)) {
+          eigen.add(i);
+          queue.push(f.points);
+        }
+      });
+    }
+    flaechen.forEach((f, i) => {
+      if (!eigen.has(i)) {
+        f.nachbar = true;
+        nachbarn++;
+      }
+    });
+  }
+  lp.shapes.push(...flaechen);
+  report.push(
+    `${lp.name}: ${flaechen.length} Lageplan-Flächen übernommen${nachbarn ? `, davon ${nachbarn} ohne Verbindung zum Gebäude als Nachbargrundstück markiert` : ''} – Nutzung und Versiegelung aus den Namen vorgeschlagen, bitte im GRZ/GFZ-Tab prüfen.`,
+  );
+}
+
+/**
+ * mittlere Höhe der Oberseite, flächengewichtet: ein Dreieck gehört zur Oberseite, wenn an seinem
+ * Schwerpunkt kein anderes Dreieck höher liegt (unabhängig vom Umlaufsinn der Dreiecke)
+ */
+function oberflaechenHoehe(t: Float32Array): number | undefined {
+  const tris: { a: number[]; b: number[]; c: number[]; area: number }[] = [];
+  for (let i = 0; i + 8 < t.length; i += 9) {
+    const a = [t[i], t[i + 1], t[i + 2]];
+    const b = [t[i + 3], t[i + 4], t[i + 5]];
+    const c = [t[i + 6], t[i + 7], t[i + 8]];
+    const area = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2;
+    if (area > 1e-9) tris.push({ a, b, c, area });
+  }
+  const zAt = (tr: (typeof tris)[number], x: number, y: number) => {
+    const { a, b, c } = tr;
+    const den = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+    const l1 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / den;
+    const l2 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / den;
+    const l3 = 1 - l1 - l2;
+    return l1 >= -1e-6 && l2 >= -1e-6 && l3 >= -1e-6 ? l1 * a[2] + l2 * b[2] + l3 * c[2] : NaN;
+  };
+  let sum = 0;
+  let w = 0;
+  for (const tr of tris) {
+    const x = (tr.a[0] + tr.b[0] + tr.c[0]) / 3;
+    const y = (tr.a[1] + tr.b[1] + tr.c[1]) / 3;
+    const z = (tr.a[2] + tr.b[2] + tr.c[2]) / 3;
+    if (tris.some((o) => o !== tr && zAt(o, x, y) > z + 0.01)) continue;
+    sum += z * tr.area;
+    w += tr.area;
+  }
+  return w > 0 ? sum / w : undefined;
+}
+
+/** berühren oder überlappen sich zwei Polygone (5 cm Toleranz)? */
+function beruehren(a: Point[], b: Point[]): boolean {
+  const nah = (p: Point, q: Point[]) => pointInPolygon(p, q) || distanceToEdges(p, q) <= 0.05;
+  return a.some((p) => nah(p, b)) || b.some((p) => nah(p, a));
 }
 
 /* ---------- Raumhöhen ---------- */

@@ -28,6 +28,7 @@ export function Toolbar() {
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
   const dirty = useEditor((s) => s.dirty);
+  const lageplan = useEditor((s) => !!s.project.storeys.find((x) => x.id === s.activeStoreyId)?.lageplan);
   const st = useEditor.getState();
 
   const confirmDiscard = () => !useEditor.getState().dirty || window.confirm('Ungespeicherte Änderungen verwerfen?');
@@ -110,24 +111,27 @@ export function Toolbar() {
       </div>
       <div className="tb-group">
         {TOOLS.map((t) => (
-          <button
-            key={t.id}
-            className={tool === t.id ? 'active' : ''}
-            onClick={() => st.setTool(t.id)}
-            title={`${t.label}${t.key ? ` (${t.key})` : ''}`}
-          >
+          <button key={t.id} className={tool === t.id ? 'active' : ''} onClick={() => st.setTool(t.id)} title={`${t.label}${t.key ? ` (${t.key})` : ''}`}>
             <span className="tb-icon">{t.icon}</span> {t.label}
           </button>
         ))}
       </div>
       <div className="tb-group" title="Art der neu gezeichneten Fläche">
         <span className="tb-label">als</span>
-        <button className={drawKind === 'outline' ? 'active kind-outline' : ''} onClick={() => st.setDrawKind('outline')} title="BGF-Umriss (B)">
-          BGF-Umriss
-        </button>
-        <button className={drawKind === 'room' ? 'active kind-room' : ''} onClick={() => st.setDrawKind('room')} title="Raum / NRF (N)">
-          Raum
-        </button>
+        {lageplan ? (
+          <button className="active kind-flaeche" title="Im Lageplan-Geschoss entstehen Lageplan-Flächen (Nutzung und Versiegelung in den Eigenschaften)">
+            Lageplan-Fläche
+          </button>
+        ) : (
+          <>
+            <button className={drawKind === 'outline' ? 'active kind-outline' : ''} onClick={() => st.setDrawKind('outline')} title="BGF-Umriss (B)">
+              BGF-Umriss
+            </button>
+            <button className={drawKind === 'room' ? 'active kind-room' : ''} onClick={() => st.setDrawKind('room')} title="Raum / NRF (N)">
+              Raum
+            </button>
+          </>
+        )}
       </div>
       <div className="tb-spacer" />
       <div className="tb-group">
@@ -144,4 +148,3 @@ export function Toolbar() {
     </div>
   );
 }
-
