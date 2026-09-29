@@ -1,0 +1,81 @@
+name: Build & Release
+
+# Baut die Windows-Installer und veröffentlicht ein GitHub-Release, sobald sich die Version
+# (package.json) auf main ändert. Manuell startbar – dann wird die aktuelle Version (neu) gebaut.
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - src-tauri/tauri.conf.json
+      - src-tauri/Cargo.toml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version prüfen
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          v=$(node -p "require('./package.json').version")
+          t=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          c=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          if [ "$v" != "$t" ] || [ "$v" != "$c" ]; then
+            echo "::error::Versionen uneinheitlich: package.json $v, tauri.conf.json $t, Cargo.toml $c"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then
+            echo "Tag v$v existiert bereits – kein neues Release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    name: Tauri (Windows) + Release
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.version.outputs.version }}
+          releaseName: Flächenrechner v${{ needs.version.outputs.version }}
+          releaseBody: Windows-Installer (.exe / .msi) und Web-Version (flaechenrechner-web.zip).
+          releaseDraft: false
+          prerelease: false
+      - name: Web-Version anhängen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd dist && 7z a -tzip ../flaechenrechner-web.zip . >/dev/null && cd ..
+          gh release upload "v${{ needs.version.outputs.version }}" flaechenrechner-web.zip --clobber

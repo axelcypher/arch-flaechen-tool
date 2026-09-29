@@ -90,8 +90,10 @@ npm run tauri:dev    # Desktop-App im Entwicklungsmodus
 npm run tauri:build  # Windows-Installer (NSIS .exe und .msi) unter src-tauri/target/release/bundle/
 ```
 
-Der Workflow **Windows-Build** (GitHub Actions, manuell startbar oder bei Tags `v*`) erzeugt die
-Installer als Build-Artefakt.
+Der Workflow **Build & Release** (GitHub Actions) baut die Windows-Installer und veröffentlicht ein
+GitHub-Release `v<version>` (mit Web-Version als ZIP), sobald die Version auf `main` erhöht wird. Die
+Version steht in `package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` und muss überall
+gleich sein. Manuell gestartet wird die aktuelle Version (neu) gebaut.
 
 ## Hinweise zur Normanwendung
 
