@@ -3,6 +3,7 @@ import type { AreaTotals } from '../core/calc';
 import { computeProject } from '../core/calc';
 import { briRechenweg } from '../core/rechenweg';
 import { fmt2 } from '../core/format';
+import { anschriftEinzeilig, flurText } from '../core/model';
 import { NUF_IDS, nutzungInfo, WOFL_KATEGORIEN } from '../core/norms';
 import { useEditor } from '../store/store';
 import { PlanFigure } from './PlanFigure';
@@ -58,7 +59,9 @@ export function Report() {
               {project.meta.projektcode && <>{project.meta.projektcode} · </>}
               <strong>{project.name}</strong>
             </div>
-            {project.meta.adresse && <div>{project.meta.adresse}</div>}
+            {anschriftEinzeilig(project.meta.adresse) && <div>{anschriftEinzeilig(project.meta.adresse)}</div>}
+            {flurText(project.meta.grundstueck) && <div>{flurText(project.meta.grundstueck)}</div>}
+            {project.meta.bauherr.name && <div>Bauherr: {project.meta.bauherr.name}</div>}
             <div>
               {project.meta.bearbeiter && <>Bearbeiter: {project.meta.bearbeiter} · </>}Stand: {today}
             </div>

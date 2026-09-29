@@ -1,7 +1,7 @@
 {
   "name": "arch-flaechen-tool",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Visuell gestützte Flächenberechnung für Gebäude (BGF, BRI, NRF nach DIN 277, Wohnfläche nach WoFlV)",
   "scripts": {

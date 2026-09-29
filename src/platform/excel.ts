@@ -8,6 +8,7 @@ import type { EvalValue } from '../core/formulaEval';
 import { evaluateSheet } from '../core/formulaEval';
 import { restoreTemplateGraphics } from './xlsxGraphics';
 import type { Project } from '../core/model';
+import { anschriftEinzeilig } from '../core/model';
 import { NUF_IDS, nutzungInfo } from '../core/norms';
 
 /**
@@ -210,7 +211,7 @@ function styleSum(ws: Worksheet, rowNo: number) {
 function title(ws: Worksheet, text: string, project: Project) {
   ws.getCell('A1').value = text;
   ws.getCell('A1').font = { bold: true, size: 14 };
-  ws.getCell('A2').value = [project.meta.projektcode, project.name, project.meta.adresse].filter(Boolean).join(' · ');
+  ws.getCell('A2').value = [project.meta.projektcode, project.name, anschriftEinzeilig(project.meta.adresse)].filter(Boolean).join(' · ');
   ws.getCell('A3').value = `Stand: ${new Date().toLocaleDateString('de-DE')}${project.meta.bearbeiter ? ` · Bearbeiter: ${project.meta.bearbeiter}` : ''}`;
   ws.getCell('A2').font = { color: { argb: 'FF6B7280' } };
   ws.getCell('A3').font = { color: { argb: 'FF6B7280' } };

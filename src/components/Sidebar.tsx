@@ -4,7 +4,8 @@ import { fmt2 } from '../core/format';
 import { shapeArea } from '../core/model';
 import { nutzungInfo } from '../core/norms';
 import { addStorey, duplicateStorey, moveStorey, removeStorey, useActiveStorey, useEditor } from '../store/store';
-import { Field, NumberField, TextField } from './fields';
+import { Field, NumberField } from './fields';
+import { ProjektInfo } from './ProjektDialog';
 
 /** Linke Seitenleiste: Projekt, Geschosse, Flächenliste des aktiven Geschosses. */
 export function Sidebar() {
@@ -21,19 +22,8 @@ export function Sidebar() {
     <aside className="sidebar sidebar-left">
       <section>
         <h2>Projekt</h2>
-        <Field label="Bezeichnung">
-          <TextField value={project.name} onChange={(v) => st.update((p) => ({ ...p, name: v }))} />
-        </Field>
-        <Field label="Projektcode">
-          <TextField value={project.meta.projektcode} onChange={(v) => st.update((p) => ({ ...p, meta: { ...p.meta, projektcode: v } }))} />
-        </Field>
-        <Field label="Adresse">
-          <TextField value={project.meta.adresse} onChange={(v) => st.update((p) => ({ ...p, meta: { ...p.meta, adresse: v } }))} />
-        </Field>
-        <Field label="Bearbeiter">
-          <TextField value={project.meta.bearbeiter} onChange={(v) => st.update((p) => ({ ...p, meta: { ...p.meta, bearbeiter: v } }))} />
-        </Field>
-        <div className="field-row">
+        <ProjektInfo />
+        <div className="field-row projekt-settings">
           <Field label="Raster [m]">
             <NumberField
               value={project.settings.gridStep}

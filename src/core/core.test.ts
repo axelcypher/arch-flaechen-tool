@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeProject, computeStorey } from './calc';
 import { projectToCsv } from './export';
+import { buildExportContext } from './exportData';
 import { fmt2, parseNum } from './format';
 import {
   centroid,
@@ -174,5 +175,42 @@ describe('Serialisierung', () => {
     expect(p.storeys[0].shapes).toHaveLength(1);
     const s = p.storeys[0].shapes[0];
     expect(s.kind === 'room' && s.nutzung).toBe('NUF1');
+  });
+});
+
+describe('Projektdaten', () => {
+  it('übernimmt die Adresse früherer Versionen (Freitext) als Straße, PLZ, Ort', () => {
+    const alt = (adresse: string) =>
+      parseProject(JSON.stringify({ format: 'arch-flaechen-tool', version: 1, meta: { projektcode: 'HSA', adresse, bearbeiter: 'TP' }, storeys: [] })).meta;
+    expect(alt('Deiringser Weg 7a, 59494 Soest').adresse).toEqual({ strasse: 'Deiringser Weg 7a', plz: '59494', ort: 'Soest' });
+    expect(alt('59494 Soest').adresse).toEqual({ strasse: '', plz: '59494', ort: 'Soest' });
+    expect(alt('Hauptstraße 1').adresse).toEqual({ strasse: 'Hauptstraße 1', plz: '', ort: '' });
+    const m = alt('Deiringser Weg 7a, 59494 Soest');
+    expect(m).toMatchObject({ projektcode: 'HSA', bearbeiter: 'TP', grundstueck: { gemarkung: '', flur: '', flurstueck: '' }, bauherr: { name: '', kontakte: [] } });
+  });
+
+  it('stellt Projektdaten als Platzhalter bereit', () => {
+    const p = createProject('Sanierung EFH Sander');
+    p.meta.adresse = { strasse: 'Deiringser Weg 7a', plz: '59494', ort: 'Soest' };
+    p.meta.grundstueck = { gemarkung: 'Soest', flur: '12', flurstueck: '345/6', flaeche: 612.5 };
+    p.meta.bauherr = {
+      name: 'Familie Sander',
+      adresse: { strasse: 'Musterweg 1', plz: '59494', ort: 'Soest' },
+      kontakte: [
+        { art: 'email', wert: 'sander@example.org' },
+        { art: 'telefon', wert: '02921 1234' },
+        { art: 'telefon', wert: '0170 555' },
+      ],
+    };
+    const s = buildExportContext(p, computeProject(p)).scalars;
+    expect(s['projekt.adresse']).toBe('Deiringser Weg 7a, 59494 Soest');
+    expect(s['projekt.plz_ort']).toBe('59494 Soest');
+    expect(s['grundstueck.flurtext']).toBe('Gemarkung Soest, Flur 12, Flurstück 345/6');
+    expect(s['grundstueck.flaeche']).toBe(612.5);
+    expect(s['bauherr.adresse']).toBe('Musterweg 1, 59494 Soest');
+    expect(s['bauherr.email']).toBe('sander@example.org');
+    expect(s['bauherr.telefon']).toBe('02921 1234, 0170 555');
+    // Roundtrip
+    expect(parseProject(serializeProject(p)).meta).toEqual(p.meta);
   });
 });

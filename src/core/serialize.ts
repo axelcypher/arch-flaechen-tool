@@ -1,5 +1,20 @@
-import type { Background, DateiArt, Nutzungsgruppe, Project, ProjektDatei, RasterBackground, Shape, Storey, VectorBackground, WoflKategorie } from './model';
-import { createProject, newId } from './model';
+import type {
+  Anschrift,
+  Background,
+  DateiArt,
+  Grundstueck,
+  KontaktArt,
+  Nutzungsgruppe,
+  Project,
+  ProjectMeta,
+  ProjektDatei,
+  RasterBackground,
+  Shape,
+  Storey,
+  VectorBackground,
+  WoflKategorie,
+} from './model';
+import { anschriftAusText, createProject, newId } from './model';
 import { NUTZUNGSGRUPPEN, WOFL_KATEGORIEN } from './norms';
 import type { Gaube, GaubenTyp } from './gaube';
 import type { Dach, DachTyp } from './roof';
@@ -41,7 +56,7 @@ export function parseProjectData(raw: unknown): Project {
     format: 'arch-flaechen-tool',
     version: 1,
     name: str(raw.name, base.name),
-    meta: { ...base.meta, ...(isObj(raw.meta) ? raw.meta : {}) } as Project['meta'],
+    meta: normalizeMeta(raw.meta),
     settings: { ...base.settings, ...(isObj(raw.settings) ? raw.settings : {}) } as Project['settings'],
     storeys: storeysRaw.filter(isObj).map(normalizeStorey),
   };
@@ -54,6 +69,34 @@ export function parseProjectData(raw: unknown): Project {
     project.dachModell = { name: str(raw.dachModell.name, 'Modell'), triangles: raw.dachModell.triangles.filter((v): v is number => typeof v === 'number') };
   }
   return project;
+}
+
+function normalizeAnschrift(v: unknown): Anschrift {
+  // bis 0.5: Adresse als Freitext
+  if (typeof v === 'string') return anschriftAusText(v);
+  const a = isObj(v) ? v : {};
+  return { strasse: str(a.strasse, ''), plz: str(a.plz, ''), ort: str(a.ort, '') };
+}
+
+function normalizeMeta(v: unknown): ProjectMeta {
+  const m = isObj(v) ? v : {};
+  const g = isObj(m.grundstueck) ? m.grundstueck : {};
+  const b = isObj(m.bauherr) ? m.bauherr : {};
+  const grundstueck: Grundstueck = { gemarkung: str(g.gemarkung, ''), flur: str(g.flur, ''), flurstueck: str(g.flurstueck, '') };
+  if (typeof g.flaeche === 'number' && Number.isFinite(g.flaeche)) grundstueck.flaeche = g.flaeche;
+  return {
+    projektcode: str(m.projektcode, ''),
+    adresse: normalizeAnschrift(m.adresse),
+    grundstueck,
+    bauherr: {
+      name: str(b.name, ''),
+      adresse: normalizeAnschrift(b.adresse),
+      kontakte: (Array.isArray(b.kontakte) ? b.kontakte : [])
+        .filter(isObj)
+        .map((k) => ({ art: oneOf<KontaktArt>(k.art, ['email', 'telefon'], 'telefon'), wert: str(k.wert, '') })),
+    },
+    bearbeiter: str(m.bearbeiter, ''),
+  };
 }
 
 const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage'];

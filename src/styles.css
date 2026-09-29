@@ -1164,3 +1164,37 @@ code {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* Projektdaten in der Seitenleiste */
+.projekt-info {
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+.projekt-code {
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+.projekt-name {
+  font-weight: 600;
+}
+.projekt-block {
+  margin-top: 6px;
+}
+.projekt-info hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0;
+}
+.projekt-settings {
+  margin-top: 10px;
+}
+.kontakt-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.kontakt-row input {
+  flex: 1;
+  min-width: 0;
+}

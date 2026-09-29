@@ -151,11 +151,80 @@ export interface ProjectSettings {
   freisitzFaktor: number;
 }
 
+export interface Anschrift {
+  /** Straße und Hausnummer */
+  strasse: string;
+  plz: string;
+  ort: string;
+}
+
+export type KontaktArt = 'email' | 'telefon';
+
+export interface Kontakt {
+  art: KontaktArt;
+  wert: string;
+}
+
+export interface Grundstueck {
+  gemarkung: string;
+  flur: string;
+  flurstueck: string;
+  /** Grundstücksfläche in m² */
+  flaeche?: number;
+}
+
+export interface Bauherr {
+  name: string;
+  adresse: Anschrift;
+  /** beliebig viele E-Mail-Adressen und Telefonnummern */
+  kontakte: Kontakt[];
+}
+
 export interface ProjectMeta {
   /** Projektcode / Projektnummer */
   projektcode: string;
-  adresse: string;
+  /** Adresse des Bauvorhabens */
+  adresse: Anschrift;
+  grundstueck: Grundstueck;
+  bauherr: Bauherr;
   bearbeiter: string;
+}
+
+export const leereAnschrift = (): Anschrift => ({ strasse: '', plz: '', ort: '' });
+
+export function leereMeta(): ProjectMeta {
+  return {
+    projektcode: '',
+    adresse: leereAnschrift(),
+    grundstueck: { gemarkung: '', flur: '', flurstueck: '' },
+    bauherr: { name: '', adresse: leereAnschrift(), kontakte: [] },
+    bearbeiter: '',
+  };
+}
+
+/** „PLZ Ort“ */
+export function plzOrt(a: Anschrift): string {
+  return [a.plz, a.ort].map((x) => x.trim()).filter(Boolean).join(' ');
+}
+
+/** Anschrift in einer Zeile: „Straße Nr., PLZ Ort“ */
+export function anschriftEinzeilig(a: Anschrift): string {
+  return [a.strasse.trim(), plzOrt(a)].filter(Boolean).join(', ');
+}
+
+/** Freitext „Straße Nr., PLZ Ort“ (frühere Versionen) in eine Anschrift zerlegen */
+export function anschriftAusText(text: string): Anschrift {
+  const t = text.trim();
+  const m = /^(.*?)[,\n]\s*(\d{4,5})\s+(.+)$/s.exec(t);
+  if (m) return { strasse: m[1].trim(), plz: m[2], ort: m[3].trim() };
+  const nurOrt = /^(\d{4,5})\s+(.+)$/.exec(t);
+  if (nurOrt) return { strasse: '', plz: nurOrt[1], ort: nurOrt[2].trim() };
+  return { strasse: t, plz: '', ort: '' };
+}
+
+/** Gemarkung, Flur, Flurstück in einer Zeile */
+export function flurText(g: Grundstueck): string {
+  return [g.gemarkung && `Gemarkung ${g.gemarkung}`, g.flur && `Flur ${g.flur}`, g.flurstueck && `Flurstück ${g.flurstueck}`].filter(Boolean).join(', ');
 }
 
 /** Art einer mitgespeicherten Originaldatei */
@@ -199,7 +268,7 @@ export function createProject(name = 'Neues Projekt'): Project {
     format: 'arch-flaechen-tool',
     version: 1,
     name,
-    meta: { projektcode: '', adresse: '', bearbeiter: '' },
+    meta: leereMeta(),
     settings: { gridStep: 0.05, freisitzFaktor: 0.25 },
     storeys: [createStorey('EG', 3)],
   };

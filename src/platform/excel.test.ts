@@ -8,7 +8,7 @@ import { buildSampleTemplate, exportDefault, exportWithTemplate } from './excel'
 
 function project() {
   const p = createProject('Sanierung EFH Sander');
-  p.meta.adresse = 'Deiringser Weg 7a, 59494 Soest';
+  p.meta.adresse = { strasse: 'Deiringser Weg 7a', plz: '59494', ort: 'Soest' };
   const kg = p.storeys[0];
   kg.name = 'KG';
   const eg = createStorey('EG', 2.8);

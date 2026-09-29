@@ -47,6 +47,8 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
   Maßstabsleiste, Legende, optional mit Hintergrundplan) und Raumliste je Geschoss
 - **Excel-Export** (.xlsx) im Standardlayout oder mit **eigener Vorlage** – siehe [docs/excel-vorlagen.md](docs/excel-vorlagen.md)
 - **CSV-Export** (Excel, Dezimalkomma)
+- **Projektdaten** (Projektcode, Adresse, Grundstück mit Gemarkung/Flur/Flurstück, Bauherr mit beliebig vielen
+  E-Mail-Adressen und Telefonnummern) im Dialog; als Platzhalter für Excel-Vorlagen (`{{bauherr.name}}` …)
 - Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)
 - **Projektarchiv** `*.oap` bzw. `*.akhp` (gleiches Format, ZIP): Projekt, Planbilder, Dachmodell sowie die
   Originaldateien der Importe (IFC, DXF, PDF) und die Excel-Vorlage – auf einem anderen Rechner vollständig

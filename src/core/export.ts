@@ -1,6 +1,7 @@
 import type { ProjectResult, RS } from './calc';
 import { fmtPlain } from './format';
 import type { Project } from './model';
+import { anschriftEinzeilig, flurText } from './model';
 import { NUF_IDS, nutzungInfo, WOFL_KATEGORIEN } from './norms';
 
 /**
@@ -13,7 +14,12 @@ export function projectToCsv(project: Project, result: ProjectResult): string {
 
   rows.push(['Projekt', project.name]);
   if (project.meta.projektcode) rows.push(['Projektcode', project.meta.projektcode]);
-  if (project.meta.adresse) rows.push(['Adresse', project.meta.adresse]);
+  const adresse = anschriftEinzeilig(project.meta.adresse);
+  if (adresse) rows.push(['Adresse', adresse]);
+  const flur = flurText(project.meta.grundstueck);
+  if (flur) rows.push(['Grundstück', flur]);
+  if (project.meta.grundstueck.flaeche) rows.push(['Grundstücksfläche [m²]', n(project.meta.grundstueck.flaeche)]);
+  if (project.meta.bauherr.name) rows.push(['Bauherr', [project.meta.bauherr.name, anschriftEinzeilig(project.meta.bauherr.adresse)].filter(Boolean).join(', ')]);
   if (project.meta.bearbeiter) rows.push(['Bearbeiter', project.meta.bearbeiter]);
   rows.push([]);
 
