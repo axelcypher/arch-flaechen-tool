@@ -8,6 +8,9 @@ import { addDatei, createProject } from '../core/model';
 import { pickFile } from '../platform/files';
 import { useEditor } from '../store/store';
 import { NumberField } from './fields';
+import { logger } from '../platform/log';
+
+const log = logger('ifc');
 
 type Step = { kind: 'start' } | { kind: 'loading'; msg: string } | { kind: 'options'; x: IfcExtract; file: string } | { kind: 'done'; report: string[] };
 
@@ -36,9 +39,15 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
       const data = new Uint8Array(await f.arrayBuffer());
       original.current = data;
       const { loadIfc } = await import('../platform/ifc');
-      const x = await loadIfc(data.slice(), (msg) => setStep({ kind: 'loading', msg }));
+      const done = log.time(`IFC lesen: ${f.name}`);
+      const x = await loadIfc(data.slice(), (msg) => {
+        log.debug(msg);
+        setStep({ kind: 'loading', msg });
+      });
+      done({ bytes: data.byteLength, geschosse: x.storeys.length, zonen: x.spaces.length });
       setStep({ kind: 'options', x, file: f.name });
     } catch (e) {
+      log.error(`IFC-Datei konnte nicht gelesen werden: ${f.name}`, e);
       setError(`IFC-Datei konnte nicht gelesen werden: ${e instanceof Error ? e.message : String(e)}`);
       setStep({ kind: 'start' });
     }
@@ -68,6 +77,7 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
       const { ifcReference } = await import('../platform/ifc');
       st.setIfcModel(ifcReference(x, file));
       const res = computeProject(useEditor.getState().project);
+      log.info('IFC-Import abgeschlossen', { datei: file, bericht: r.report, bgf: res.total.bgf.total, bri: res.total.bri.total, nrf: res.total.nrf.total, wofl: res.total.wofl });
       setStep({
         kind: 'done',
         report: [
@@ -76,6 +86,7 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
         ],
       });
     } catch (e) {
+      log.error('IFC-Import fehlgeschlagen', e);
       setError(`Import fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
       setStep({ kind: 'options', x, file });
     }

@@ -5,10 +5,26 @@
   --text: #1f2328;
   --muted: #6b7280;
   --accent: #2a5bd7;
+  --accent-hover: #2350bf;
   --accent-soft: #e6edfb;
   --sel: #ff7a00;
   --danger: #c0392b;
   --canvas: #fbfbfa;
+  --input-bg: #ffffff;
+  --hover: #f1f3f6;
+  --line-soft: #eef0f3;
+  --room-bg: #fdf3d8;
+  --room-border: #c9981a;
+  --room-text: #7a5b00;
+  --warn-bg: #fff4e5;
+  --warn-border: #f5c26b;
+  --warn-text: #8a5300;
+  --overlay-bg: rgba(255, 255, 255, 0.92);
+  --code-bg: rgba(0, 0, 0, 0.05);
+  --backdrop: rgba(20, 24, 31, 0.4);
+  --titlebar: #e9ebef;
+  /* Zeichenfläche: im dunklen Schema invertiert (Pläne bleiben lesbar, Farbtöne erhalten) */
+  --canvas-filter: none;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 13px;
   color: var(--text);
@@ -76,7 +92,7 @@ button {
   font: inherit;
   padding: 4px 8px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--input-bg);
   border-radius: 4px;
   cursor: pointer;
   color: var(--text);
@@ -84,7 +100,7 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #f1f3f6;
+  background: var(--hover);
 }
 
 button:disabled {
@@ -99,9 +115,9 @@ button.active {
 }
 
 button.active.kind-room {
-  background: #fdf3d8;
-  border-color: #c9981a;
-  color: #7a5b00;
+  background: var(--room-bg);
+  border-color: var(--room-border);
+  color: var(--room-text);
 }
 
 button.primary {
@@ -111,7 +127,7 @@ button.primary {
 }
 
 button.primary:hover:not(:disabled) {
-  background: #2350bf;
+  background: var(--accent-hover);
 }
 
 button.danger {
@@ -230,7 +246,7 @@ select {
   padding: 4px 6px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text);
   width: 100%;
   min-width: 0;
@@ -278,7 +294,7 @@ select:focus {
 }
 
 .list li:hover {
-  background: #f1f3f6;
+  background: var(--hover);
 }
 
 .list li.active {
@@ -314,9 +330,9 @@ select:focus {
 }
 
 .warning {
-  background: #fff4e5;
-  border: 1px solid #f5c26b;
-  color: #8a5300;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
   padding: 6px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -395,7 +411,7 @@ select:focus {
 
 .summary-table td {
   padding: 3px 4px;
-  border-top: 1px solid #eef0f3;
+  border-top: 1px solid var(--line-soft);
 }
 
 .summary-table tr.strong td {
@@ -556,7 +572,7 @@ select:focus {
 
 .hud > span {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 2px 6px;
@@ -587,7 +603,7 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 3px 4px 3px 8px;
@@ -622,7 +638,7 @@ select:focus {
 }
 
 .overlay-dialog form {
-  background: #fff;
+  background: var(--panel);
   padding: 16px 20px;
   border-radius: 6px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
@@ -651,7 +667,7 @@ select:focus {
 .report-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 24, 31, 0.45);
+  background: var(--backdrop);
   overflow: auto;
   padding: 24px;
   z-index: 10;
@@ -883,7 +899,7 @@ select:focus {
   position: absolute;
   left: 8px;
   bottom: 8px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--overlay-bg);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px 10px;
@@ -976,7 +992,7 @@ select:focus {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 24, 31, 0.35);
+  background: var(--backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -984,7 +1000,7 @@ select:focus {
 }
 
 .modal {
-  background: #fff;
+  background: var(--panel);
   padding: 18px 22px;
   border-radius: 6px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
@@ -1045,7 +1061,7 @@ select:focus {
 code {
   font-family: Consolas, 'Cascadia Mono', monospace;
   font-size: 11.5px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--code-bg);
   padding: 0 3px;
   border-radius: 3px;
 }
@@ -1092,9 +1108,9 @@ code {
   left: 50%;
   transform: translateX(-50%);
   max-width: 70%;
-  background: #fff4e5;
-  border: 1px solid #f5c26b;
-  color: #8a5300;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
   padding: 6px 12px;
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -1197,4 +1213,328 @@ code {
 .kontakt-row input {
   flex: 1;
   min-width: 0;
+}
+
+/* ---------- Dunkles Schema ---------- */
+
+:root[data-theme='dunkel'] {
+  --bg: #16181d;
+  --panel: #1f2228;
+  --border: #353a43;
+  --text: #e4e6ea;
+  --muted: #9aa1ad;
+  --accent: #5b8cff;
+  --accent-hover: #7aa2ff;
+  --accent-soft: #24324f;
+  --sel: #ff9a3c;
+  --danger: #ef6b5b;
+  --input-bg: #262a31;
+  --hover: #2b3038;
+  --line-soft: #2b3038;
+  --room-bg: #3a3120;
+  --room-border: #b8912c;
+  --room-text: #f0d48a;
+  --warn-bg: #3a2c17;
+  --warn-border: #8a6420;
+  --warn-text: #f3c77a;
+  --overlay-bg: rgba(31, 34, 40, 0.92);
+  --code-bg: rgba(255, 255, 255, 0.08);
+  --backdrop: rgba(0, 0, 0, 0.55);
+  --titlebar: #121418;
+}
+
+:root[data-theme='dunkel'][data-canvas='dunkel'] {
+  --canvas-filter: invert(0.92) hue-rotate(180deg);
+}
+
+/* Papier (Flächenaufstellung, Planausschnitte) bleibt immer hell */
+.report {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --border: #d8dbe0;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --accent: #2a5bd7;
+  --accent-soft: #e6edfb;
+  --input-bg: #ffffff;
+  --hover: #f1f3f6;
+  --line-soft: #eef0f3;
+  --warn-bg: #fff4e5;
+  --warn-border: #f5c26b;
+  --warn-text: #8a5300;
+  color: var(--text);
+}
+
+/* Die Zeichenfläche arbeitet immer mit den hellen Farben – im dunklen Schema wird sie als Ganzes invertiert */
+.canvas {
+  --text: #1f2328;
+  --muted: #6b7280;
+  --border: #d8dbe0;
+  --panel: #ffffff;
+  --accent: #2a5bd7;
+  --accent-soft: #e6edfb;
+  --sel: #ff7a00;
+  --danger: #c0392b;
+  filter: var(--canvas-filter);
+}
+
+/* ---------- Titelleiste ---------- */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  flex: 0 0 34px;
+  padding-left: 10px;
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.titlebar-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.titlebar-app {
+  font-weight: 600;
+}
+
+.titlebar-sep,
+.titlebar-project {
+  color: var(--muted);
+}
+
+.titlebar-project {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+
+.titlebar-dirty {
+  color: var(--sel);
+}
+
+.titlebar-drag {
+  flex: 1;
+  align-self: stretch;
+}
+
+.titlebar-btn {
+  position: relative;
+  border: none;
+  background: transparent;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+.titlebar-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.titlebar-badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.titlebar-menu {
+  position: relative;
+}
+
+.titlebar-dropdown {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  z-index: 40;
+  width: 250px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.titlebar-dropdown-head {
+  padding: 2px 6px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.titlebar-dropdown button {
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.titlebar-dropdown button.active {
+  background: var(--accent-soft);
+}
+
+.titlebar-dropdown .toggle {
+  margin: 6px 6px 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.window-controls {
+  display: flex;
+  align-self: stretch;
+  margin-left: 4px;
+}
+
+.wc-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.wc-btn svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.wc-btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.wc-close:hover:not(:disabled) {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* ---------- Protokoll ---------- */
+
+.modal-log {
+  width: min(960px, 92vw);
+  height: min(680px, 86vh);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.log-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.log-head h3 {
+  margin: 0 8px 0 0;
+}
+
+.log-search {
+  flex: 1;
+}
+
+.log-list {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  font-family: Consolas, 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.log-entry {
+  display: grid;
+  grid-template-columns: 92px 48px 90px 1fr;
+  gap: 8px;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.log-time,
+.log-scope {
+  color: var(--muted);
+}
+
+.log-level {
+  font-weight: 600;
+}
+
+.log-debug .log-level {
+  color: var(--muted);
+}
+
+.log-info .log-level {
+  color: var(--accent);
+}
+
+.log-warn {
+  background: var(--warn-bg);
+}
+
+.log-warn .log-level {
+  color: var(--warn-text);
+}
+
+.log-error {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.log-error .log-level {
+  color: var(--danger);
+}
+
+.log-msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-data {
+  margin: 2px 0 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  font: inherit;
+}
+
+.log-actions {
+  align-items: center;
+}
+
+/* ---------- Absturzhinweis ---------- */
+
+.crash {
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.crash pre {
+  white-space: pre-wrap;
+  color: var(--danger);
 }

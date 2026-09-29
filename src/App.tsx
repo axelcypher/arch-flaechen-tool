@@ -1,10 +1,13 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Canvas } from './components/Canvas';
 import { ExcelDialog } from './components/ExcelDialog';
 import { Properties } from './components/Properties';
 import { Report } from './components/Report';
 import { Sidebar } from './components/Sidebar';
+import { LogDialog } from './components/LogDialog';
+import { TitleBar } from './components/TitleBar';
 import { Toolbar } from './components/Toolbar';
+import { applyTheme, useTheme } from './platform/theme';
 import { useEditor } from './store/store';
 
 const View3D = lazy(() => import('./components/View3D'));
@@ -16,6 +19,11 @@ export function App() {
   const setMainView = useEditor((s) => s.setMainView);
   const name = useEditor((s) => s.project.name);
   const dirty = useEditor((s) => s.dirty);
+  const theme = useTheme((s) => s.theme);
+  const canvasDunkel = useTheme((s) => s.canvasDunkel);
+  const [logOpen, setLogOpen] = useState(false);
+
+  useEffect(() => applyTheme(theme, canvasDunkel), [theme, canvasDunkel]);
 
   useEffect(() => {
     document.title = `${dirty ? '• ' : ''}${name} – Flächenrechner`;
@@ -31,6 +39,7 @@ export function App() {
 
   return (
     <div className="app">
+      <TitleBar onOpenLog={() => setLogOpen(true)} />
       <Toolbar />
       <div className="workspace">
         <Sidebar />
@@ -58,6 +67,7 @@ export function App() {
       </div>
       {reportOpen && <Report />}
       {excelOpen && <ExcelDialog />}
+      {logOpen && <LogDialog onClose={() => setLogOpen(false)} />}
     </div>
   );
 }

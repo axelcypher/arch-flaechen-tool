@@ -1,5 +1,8 @@
 import type { IfcAPI } from 'web-ifc';
 import type { IfcExtract, IfcMeshPart, IfcSpaceData } from '../core/ifcData';
+import { logger } from './log';
+
+const log = logger('ifc');
 
 /**
  * Liest die für die Flächenberechnung relevanten Daten aus einem IFC-Modell (über web-ifc).
@@ -168,8 +171,9 @@ export function extractIfc(api: IfcAPI, T: IfcTypeCodes, data: Uint8Array, onPro
         try {
           tryIt();
           if (spaceTris.size) break;
-        } catch {
+        } catch (e) {
           // nächsten Weg versuchen
+          log.debug('Raumgeometrie: Variante nicht verfügbar, nächste wird versucht', e);
         }
       }
     }

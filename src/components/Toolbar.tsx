@@ -8,6 +8,9 @@ import { mitVorlage } from '../platform/vorlage';
 import type { Tool } from '../store/store';
 import { restoreIfcModel, useEditor } from '../store/store';
 import { IfcImportDialog } from './IfcImportDialog';
+import { logger } from '../platform/log';
+
+const log = logger('datei');
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: 'select', label: 'Auswählen', key: 'V', icon: '⬉' },
@@ -43,10 +46,13 @@ export function Toolbar() {
     const f = await pickFile(`${ARCHIV_ENDUNGEN.map((e) => `.${e}`).join(',')},.json,application/json`);
     if (!f) return;
     try {
+      const done = log.time(`Öffnen: ${f.name}`);
       const p = readProjectFile(new Uint8Array(await f.arrayBuffer()));
       st.loadProject(p);
+      done({ bytes: f.size, geschosse: p.storeys.length, dateien: p.dateien?.length ?? 0 });
       void restoreIfcModel(p);
     } catch (e) {
+      log.error(`Öffnen fehlgeschlagen: ${f.name}`, e);
       alert(e instanceof ProjectFormatError ? e.message : `Datei konnte nicht geladen werden: ${String(e)}`);
     }
   };
@@ -62,8 +68,12 @@ export function Toolbar() {
         moreExtensions: ARCHIV_ENDUNGEN.slice(1),
         mime: 'application/zip',
       });
-      if (ok) st.markSaved();
+      if (ok) {
+        st.markSaved();
+        log.info('Projekt gespeichert', { name: p.name });
+      }
     } catch (e) {
+      log.error('Speichern fehlgeschlagen', e);
       alert(`Speichern fehlgeschlagen: ${String(e)}`);
     }
   };
@@ -79,6 +89,7 @@ export function Toolbar() {
         mime: 'text/csv;charset=utf-8',
       });
     } catch (e) {
+      log.error('CSV-Export fehlgeschlagen', e);
       alert(`Export fehlgeschlagen: ${String(e)}`);
     }
   };
