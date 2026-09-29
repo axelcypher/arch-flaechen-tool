@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { computeProject } from '../core/calc';
 import { fmt2 } from '../core/format';
 import type { IfcExtract } from '../core/ifcData';
 import type { IfcImportOptions } from '../core/ifcImport';
 import { buildFromIfc } from '../core/ifcImport';
-import { createProject } from '../core/model';
+import { addDatei, createProject } from '../core/model';
 import { pickFile } from '../platform/files';
 import { useEditor } from '../store/store';
 import { NumberField } from './fields';
@@ -15,6 +15,8 @@ type Step = { kind: 'start' } | { kind: 'loading'; msg: string } | { kind: 'opti
 export function IfcImportDialog({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<Step>({ kind: 'start' });
   const [error, setError] = useState<string | null>(null);
+  /** Originaldatei – wird im Projektarchiv mitgespeichert */
+  const original = useRef<Uint8Array | null>(null);
   const [opts, setOpts] = useState<IfcImportOptions & { replace: boolean }>({
     rooms: true,
     outlines: true,
@@ -31,8 +33,9 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
     setStep({ kind: 'loading', msg: 'Datei wird gelesen …' });
     try {
       const data = new Uint8Array(await f.arrayBuffer());
+      original.current = data;
       const { loadIfc } = await import('../platform/ifc');
-      const x = await loadIfc(data, (msg) => setStep({ kind: 'loading', msg }));
+      const x = await loadIfc(data.slice(), (msg) => setStep({ kind: 'loading', msg }));
       setStep({ kind: 'options', x, file: f.name });
     } catch (e) {
       setError(`IFC-Datei konnte nicht gelesen werden: ${e instanceof Error ? e.message : String(e)}`);
@@ -54,9 +57,12 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
         const p = createProject(x.projectName || file.replace(/\.ifc$/i, ''));
         p.storeys = r.storeys;
         p.dachModell = r.dachModell;
-        st.loadProject(p);
+        st.loadProject(original.current ? addDatei(p, file, 'ifc', original.current).project : p);
       } else {
-        st.update((p) => ({ ...p, storeys: [...p.storeys, ...r.storeys], dachModell: r.dachModell ?? p.dachModell }));
+        st.update((p) => {
+          const next = { ...p, storeys: [...p.storeys, ...r.storeys], dachModell: r.dachModell ?? p.dachModell };
+          return original.current ? addDatei(next, file, 'ifc', original.current).project : next;
+        });
       }
       const { ifcReference } = await import('../platform/ifc');
       st.setIfcModel(ifcReference(x, file));

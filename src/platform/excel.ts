@@ -1,7 +1,7 @@
 import type { Cell, Style, Workbook, Worksheet } from 'exceljs';
 import type { ProjectResult } from '../core/calc';
 import type { ExportContext, Value } from '../core/exportData';
-import { buildExportContext, PLACEHOLDER_DOCS } from '../core/exportData';
+import { buildExportContext, COLLECTIONS, PLACEHOLDER_DOCS } from '../core/exportData';
 import type { CellValue, TemplateRow } from '../core/template';
 import { expandTemplate } from '../core/template';
 import type { EvalValue } from '../core/formulaEval';
@@ -62,7 +62,7 @@ function fillSheet(ws: Worksheet, ctx: ExportContext) {
   const heights = new Map<number, number | undefined>();
   const rowStyles = new Map<number, Partial<Style>>();
   let firstDynamic = Infinity;
-  const dynamic = /\{\{\s*(#|\/|(geschoss|raum|wohnung|nutzung|bri)(\[[^\]]*\])?\.)/i;
+  const dynamic = new RegExp(`\\{\\{\\s*(#|\\/|(${COLLECTIONS.join('|')})(\\[[^\\]]*\\])?\\.)`, 'i');
 
   for (let r = 1; r <= lastRow; r++) {
     const row = ws.getRow(r);
@@ -431,9 +431,53 @@ export async function buildSampleTemplate(): Promise<Uint8Array> {
     ['A', 'B', 'C', 'D'].forEach((c) => (ws.getCell(`${c}14`).border = { top: MEDIUM, bottom: THIN }));
   }
 
-  /* BRI mit Rechenweg: Teilkörper je Geschoss, Volumen per Excel-Formel */
+  /*
+   * BRI wie in einer Büro-Berechnung: Normalgeschosse als Geschosshöhe × BGF (eine Zeile je Umriss),
+   * Dachgeschosse je Körper mit geschlossener Formel (z. B. Walmdach B × H × (3 × L − B) / 6).
+   */
   {
     const ws = wb.addWorksheet('BRI');
+    sampleHeader(ws, 'Brutto-Rauminhaltsberechnung', 'F');
+    const right = (ref: string) => (ws.getCell(ref).alignment = { horizontal: 'right' });
+    ws.getRow(10).values = ['Brutto-Rauminhalt', null, 'Geschosshöhe', 'BGF', 'BRI', 'BRI Summe'];
+    ws.getRow(10).font = { bold: true };
+    ['C10', 'D10', 'E10', 'F10'].forEach(right);
+    // Normalgeschosse: Höhe × Fläche, Ergebnis per Excel-Formel
+    ws.getRow(11).values = [null, '{{koerper[normal,grundkoerper].geschoss}}', '{{koerper[normal,grundkoerper].hoehe}}', '{{koerper[normal,grundkoerper].flaeche}}', { formula: 'C11*D11' } as never];
+    ws.getCell('C11').numFmt = '#,##0.00 "m  *"';
+    ws.getCell('D11').numFmt = '#,##0.00 "m²  ="';
+    ws.getCell('E11').numFmt = M3;
+    ws.getCell('F12').value = { formula: 'SUM(E11:E11)' } as never;
+    ws.getCell('F12').numFmt = M3;
+    ws.getCell('F12').font = { bold: true };
+    // Dachgeschosse: je Körper Bezeichnung, Maße, Formel und Rechnung
+    ws.getCell('A14').value = '{{#geschoss[dg]}}{{geschoss.name}}';
+    ws.getCell('A14').font = { bold: true };
+    ws.getCell('B15').value = '{{#koerper}}{{koerper.bezeichnung}}';
+    ws.getCell('B16').value = '{{koerper.parameter}}';
+    ws.getCell('D18').value = '{{koerper.formel}} =';
+    ws.getCell('D19').value = '{{koerper.rechnung}} =';
+    ws.getCell('E19').value = '{{koerper.volumen}}';
+    ws.getCell('E19').numFmt = M3;
+    ['D18', 'D19'].forEach(right);
+    ws.getCell('A21').value = '{{/koerper}}';
+    ws.getCell('F22').value = { formula: 'SUM(E19:E19)' } as never;
+    ws.getCell('F22').numFmt = M3;
+    ws.getCell('F22').font = { bold: true };
+    ws.getCell('A23').value = '{{/geschoss}}';
+    ws.getRow(25).values = ['Brutto-Rauminhalt gesamt', null, null, null, null, { formula: 'SUM(F12:F22)' } as never];
+    ws.getRow(25).font = { bold: true };
+    ws.getCell('F25').numFmt = M3;
+    ['A', 'B', 'C', 'D', 'E', 'F'].forEach((c) => (ws.getCell(`${c}25`).border = { top: MEDIUM, bottom: THIN }));
+    ws.getRow(26).values = ['Kontrolle (berechnet)', null, null, null, null, '{{summe.bri}}'];
+    ws.getRow(26).font = { italic: true, color: { argb: 'FF6B7280' } };
+    ws.getCell('F26').numFmt = M3;
+    [16, 30, 14, 16, 14, 14].forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  }
+
+  /* BRI mit Rechenweg: Teilkörper je Geschoss, Volumen per Excel-Formel */
+  {
+    const ws = wb.addWorksheet('BRI Teilkörper');
     sampleHeader(ws, 'Brutto-Rauminhalt (Rechenweg)', 'I');
     const head = ['Geschoss', 'Teilkörper', 'Anzahl', 'Länge', 'Breite', 'Fläche', 'Höhe', 'Faktor', 'Volumen'];
     ws.getRow(10).values = head;
@@ -485,7 +529,7 @@ export async function buildSampleTemplate(): Promise<Uint8Array> {
     help.getCell('A1').value = 'Platzhalter für Excel-Vorlagen';
     help.getCell('A1').font = { bold: true, size: 14 };
     help.getCell('A2').value =
-      'Platzhalter in doppelten geschweiften Klammern werden beim Export ersetzt. Zeilen mit raum.*, geschoss.*, wohnung.*, nutzung.* oder bri.* werden je Datensatz wiederholt, #geschoss … /geschoss wiederholt ganze Zeilenblöcke. Formeln (z. B. SUMME über eine Wiederholungszeile) werden automatisch auf die erzeugten Zeilen erweitert. Steht nur ein Platzhalter in der Zelle, wird eine Zahl eingetragen und das Zellformat der Vorlage bleibt erhalten. Dieses Blatt kann gelöscht werden.';
+      'Platzhalter in doppelten geschweiften Klammern werden beim Export ersetzt. Zeilen mit raum.*, geschoss.*, wohnung.*, nutzung.*, bri.* oder koerper.* werden je Datensatz wiederholt, #geschoss … /geschoss wiederholt ganze Zeilenblöcke. Formeln (z. B. SUMME über eine Wiederholungszeile) werden automatisch auf die erzeugten Zeilen erweitert. Steht nur ein Platzhalter in der Zelle, wird eine Zahl eingetragen und das Zellformat der Vorlage bleibt erhalten. Dieses Blatt kann gelöscht werden.';
     help.getCell('A2').alignment = { wrapText: true, vertical: 'top' };
     help.mergeCells('A2:B2');
     help.getRow(2).height = 90;

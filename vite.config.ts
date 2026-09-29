@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 
 // Tauri erwartet einen festen Port und setzt TAURI_ENV_* Variablen beim Build.
 const host = process.env.TAURI_DEV_HOST;
@@ -17,6 +18,9 @@ export default defineConfig({
     watch: { ignored: ['**/src-tauri/**'] },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
+  define: {
+    __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version),
+  },
   build: {
     // WebView2 (Windows) ist immergrün; pdf.js benötigt eine aktuelle Engine
     target: 'es2022',

@@ -1,6 +1,6 @@
 [package]
 name = "arch-flaechen-tool"
-version = "0.2.1"
+version = "0.3.0"
 description = "Visuell gestützte Flächenberechnung für Gebäude (DIN 277, WoFlV)"
 authors = ["Tobias Pendzialek"]
 license = "MIT"

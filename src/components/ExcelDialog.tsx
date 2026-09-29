@@ -1,26 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { computeProject } from '../core/calc';
 import { PLACEHOLDER_DOCS } from '../core/exportData';
-import { base64ToBytes, bytesToBase64, pickFile, saveBinaryFile } from '../platform/files';
+import { addDatei } from '../core/model';
+import { pickFile, saveBinaryFile } from '../platform/files';
+import { aktuelleVorlage, removeGlobaleVorlage, setGlobaleVorlage } from '../platform/vorlage';
 import { useEditor } from '../store/store';
 
-const TEMPLATE_KEY = 'arch-flaechen-tool:excel-template';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-interface StoredTemplate {
-  name: string;
-  base64: string;
-  date: string;
-}
-
-function loadTemplate(): StoredTemplate | null {
-  try {
-    const raw = localStorage.getItem(TEMPLATE_KEY);
-    return raw ? (JSON.parse(raw) as StoredTemplate) : null;
-  } catch {
-    return null;
-  }
-}
 
 function safeFileName(name: string) {
   return name.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'Projekt';
@@ -29,7 +15,10 @@ function safeFileName(name: string) {
 /** Excel-Export: Standardlayout oder eigene Vorlage (.xlsx mit Platzhaltern). */
 export function ExcelDialog() {
   const setOpen = useEditor((s) => s.setExcelOpen);
-  const [template, setTemplate] = useState<StoredTemplate | null>(loadTemplate);
+  const project = useEditor((s) => s.project);
+  // Zähler, damit Änderungen an der im Browser hinterlegten Vorlage neu gelesen werden
+  const [rev, setRev] = useState(0);
+  const template = useMemo(() => aktuelleVorlage(project), [project, rev]);
   const [mode, setMode] = useState<'default' | 'template'>(template ? 'template' : 'default');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,20 +31,18 @@ export function ExcelDialog() {
       setError('Bitte eine Excel-Datei im Format .xlsx wählen (.xls wird nicht unterstützt).');
       return;
     }
-    const t: StoredTemplate = { name: f.name, base64: bytesToBase64(new Uint8Array(await f.arrayBuffer())), date: new Date().toLocaleDateString('de-DE') };
-    try {
-      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(t));
-    } catch {
-      setError('Die Vorlage ist zu groß, um sie dauerhaft zu speichern – sie gilt nur für diesen Export.');
-    }
-    setTemplate(t);
+    const daten = new Uint8Array(await f.arrayBuffer());
+    // gehört zum Projekt (wird im Archiv mitgespeichert) und gilt künftig auch für neue Projekte
+    useEditor.getState().update((p) => addDatei(p, f.name, 'vorlage', daten).project);
+    setError(setGlobaleVorlage(f.name, daten) ? null : 'Die Vorlage ist zu groß, um sie für weitere Projekte zu hinterlegen – sie wird nur mit diesem Projekt gespeichert.');
+    setRev(rev + 1);
     setMode('template');
-    setError(null);
   };
 
   const removeTemplate = () => {
-    localStorage.removeItem(TEMPLATE_KEY);
-    setTemplate(null);
+    useEditor.getState().update((p) => (p.dateien?.some((d) => d.art === 'vorlage') ? { ...p, dateien: p.dateien.filter((d) => d.art !== 'vorlage') } : p));
+    removeGlobaleVorlage();
+    setRev(rev + 1);
     setMode('default');
   };
 
@@ -78,7 +65,7 @@ export function ExcelDialog() {
       const { exportDefault, exportWithTemplate } = await import('../platform/excel');
       const p = useEditor.getState().project;
       const result = computeProject(p);
-      const data = mode === 'template' && template ? await exportWithTemplate(base64ToBytes(template.base64), p, result) : await exportDefault(p, result);
+      const data = mode === 'template' && template ? await exportWithTemplate(template.daten, p, result) : await exportDefault(p, result);
       const ok = await saveBinaryFile({ defaultName: `${safeFileName(p.name)} Flächen.xlsx`, data, filterName: 'Excel-Arbeitsmappe', extension: 'xlsx', mime: XLSX_MIME });
       if (ok) setOpen(false);
     } catch (e) {
@@ -107,7 +94,10 @@ export function ExcelDialog() {
             <br />
             {template ? (
               <span className="small-text">
-                {template.name} <span className="muted">(hinterlegt am {template.date})</span>
+                {template.name}{' '}
+                <span className="muted">
+                  ({template.ausProjekt ? 'im Projekt gespeichert' : 'hinterlegt'} am {template.datum})
+                </span>
               </span>
             ) : (
               <span className="muted small-text">Noch keine Vorlage hinterlegt.</span>

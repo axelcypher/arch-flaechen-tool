@@ -2,9 +2,10 @@
 
 Der Excel-Export (Schaltfläche **Excel**) erzeugt entweder das Standardlayout oder füllt eine eigene
 Vorlage. Eine Vorlage ist eine normale `.xlsx`-Datei – mit Logo, Kopf, Schriften, Rahmen, Zahlenformaten
-und eigenen Formeln – in die Platzhalter geschrieben werden. Sie wird in der Anwendung hinterlegt und bei
-jedem Export wiederverwendet. **Muster-Vorlage herunterladen** liefert eine Beispieldatei mit den Blättern
-Wohnflächen, BGF, BRI (Rechenweg), Räume und einer Platzhalter-Übersicht.
+und eigenen Formeln – in die Platzhalter geschrieben werden. Sie wird im Projekt gespeichert (und im
+Projektarchiv `.oap`/`.akhp` mitgenommen) und zusätzlich in der Anwendung als Standard für weitere Projekte
+hinterlegt. **Muster-Vorlage herunterladen** liefert eine Beispieldatei mit den Blättern Wohnflächen, BGF,
+BRI (Normalgeschosse/Dachgeschoss), BRI Teilkörper, Räume und einer Platzhalter-Übersicht.
 
 ## Grundprinzip
 
@@ -12,7 +13,7 @@ Wohnflächen, BGF, BRI (Rechenweg), Räume und einer Platzhalter-Übersicht.
 |---|---|
 | `{{projekt.name}}`, `{{projekt.code}}`, `{{datum}}`, `{{summe.bgf}}` | Einzelwert |
 | `{{geschoss:EG.bri}}`, `{{wohnung:WE 01.wofl}}` | Wert eines bestimmten Geschosses / einer Wohnung |
-| `{{raum.name}}` in einer Zeile | **Zeile** wird je Raum wiederholt (ebenso `geschoss`, `wohnung`, `nutzung`, `bri`) |
+| `{{raum.name}}` in einer Zeile | **Zeile** wird je Raum wiederholt (ebenso `geschoss`, `wohnung`, `nutzung`, `bri`, `koerper`) |
 | `{{#geschoss}}` … `{{/geschoss}}` | **Zeilenblock** wird je Geschoss wiederholt; Blöcke lassen sich verschachteln |
 | `{{raum[wofl].name}}` | Wiederholung mit **Filter** |
 | `{{geschoss.name\|einmal}}` | Wert nur in der **ersten** Zeile einer Wiederholung |
@@ -33,7 +34,7 @@ Teilkörper **dieses** Geschosses. Geschosse, für die eine Wiederholungszeile i
 liefert (z. B. ein Kellergeschoss ohne Wohnfläche im Abschnitt „Wohnflächen“), **entfallen**.
 
 Weitere Blockarten: `{{#wohnung}}` (Räume je Wohnung), `{{#nutzung}}` (Räume je Nutzungsgruppe),
-`{{#raum}}` (mehrzeilige Angaben je Raum).
+`{{#raum}}` (mehrzeilige Angaben je Raum), `{{#koerper}}` (mehrzeilige Angaben je BRI-Körper).
 
 ### Beispiel: Wohnflächen mit Haupt- und Nebenflächen
 
@@ -81,7 +82,52 @@ MIN, MAX, MITTELWERT, ANZAHL, WENN). Excel rechnet beim Öffnen ohnehin alles ne
 Bezüge aus *anderen* Blättern auf ein Blatt mit Wiederholungen werden nicht angepasst – dafür die
 `summe.*`- oder `geschoss:NAME.*`-Platzhalter verwenden.
 
-## BRI mit Rechenweg
+## BRI: Normalgeschosse und Dachgeschoss
+
+Normalgeschosse und Dachgeschosse werden unterschiedlich gerechnet: im Normalgeschoss
+**Geschosshöhe × BGF**, im Dachgeschoss je Dachkörper mit eigener Formel (Walmdach, Satteldach …).
+Dafür gibt es die Sammlung `koerper` – je BGF-Umriss ein **Grundkörper** (Quader bis Geschoss- bzw.
+Traufhöhe) und bei geneigtem Dach ein **Dachkörper** als Ganzes – sowie die Filter `[normal]` und `[dg]`.
+
+Ein Geschoss gilt automatisch als Dachgeschoss, sobald einer seiner BGF-Umrisse ein geneigtes Dach trägt.
+In den Geschosseigenschaften lässt sich das unter **Geschossart** festlegen (automatisch / Normalgeschoss /
+Dachgeschoss). Der Filter wirkt auf `geschoss`, `raum`, `bri` und `koerper`.
+
+| Dachform (Rechteck L × B, L in Firstrichtung) | `koerper.formel` |
+|---|---|
+| Pult-, Sattel-, Sheddach | `L × B × H / 2` |
+| Walm-/Zeltdach, gleiche Neigung | `B × H × (3 × L − B) / 6` |
+| Walmdach, eigene Walmneigung | `B × H × (3 × L − 2 × a) / 6` (a = Walmtiefe) |
+| Krüppelwalmdach | `L × B × H / 2 − a × b × h / 3` |
+| Mansarddach | `L × (Hu × (B − d) + Bo × Ho / 2)` |
+| Tonnendach | `L × A` (A = Kreisabschnitt) |
+| unregelmäßiger Grundriss, Mansardwalm, Dach aus IFC | `A × hm` (Grundfläche × mittlere Höhe) |
+| Grundkörper | `L × B × H` bzw. `A × H` |
+
+`koerper.parameter` listet die Maße („H: 5,375 m; B: 10,75 m; L: 12,00 m“), `koerper.rechnung` die Formel
+mit eingesetzten Werten („10,75 × 5,375 × (3 × 12 − 10,75) / 6“, Maße auf mm genau – nachrechenbar),
+`koerper.volumen` das Ergebnis. Die Summe aller Körper ist exakt der BRI. Beispiel (Blatt „BRI“ der
+Muster-Vorlage):
+
+| | A | B | C | D | E | F |
+|---|---|---|---|---|---|---|
+| 10 | Brutto-Rauminhalt | | Geschosshöhe | BGF | BRI | BRI Summe |
+| 11 | | `{{koerper[normal,grundkoerper].geschoss}}` | `{{koerper[normal,grundkoerper].hoehe}}` | `{{koerper[normal,grundkoerper].flaeche}}` | `=C11*D11` | |
+| 12 | | | | | | `=SUMME(E11:E11)` |
+| 14 | `{{#geschoss[dg]}}{{geschoss.name}}` | | | | | |
+| 15 | | `{{#koerper}}{{koerper.bezeichnung}}` | | | | |
+| 16 | | `{{koerper.parameter}}` | | | | |
+| 18 | | | | `{{koerper.formel}} =` | | |
+| 19 | | | | `{{koerper.rechnung}} =` | `{{koerper.volumen}}` | |
+| 21 | `{{/koerper}}` | | | | | |
+| 22 | | | | | | `=SUMME(E19:E19)` |
+| 23 | `{{/geschoss}}` | | | | | |
+| 25 | Brutto-Rauminhalt gesamt | | | | | `=SUMME(F12:F22)` |
+
+Die Zahlenformate `#.##0,00 "m  *"` und `#.##0,00 "m²  ="` erzeugen die Darstellung „2,40 m \*
+48,69 m² =“. Gauben sind im Modell (noch) nicht als eigene Körper erfasst.
+
+## BRI mit Rechenweg (Teilkörper)
 
 Die Sammlung `bri` enthält den **Rechenweg des Brutto-Rauminhalts**: je BGF-Umriss die Teilkörper mit
 
@@ -101,7 +147,7 @@ Die Sammlung `bri` enthält den **Rechenweg des Brutto-Rauminhalts**: je BGF-Umr
 | Abzugsflächen | wie oben, negative Anzahl | −1 … | |
 
 Die Summe der Teilkörper entspricht exakt dem berechneten BRI. `bri.formel` enthält den Rechenweg als
-Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI“ der Muster-Vorlage):
+Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI Teilkörper“ der Muster-Vorlage):
 
 | | A | B | C | D | E | F | G | H | I |
 |---|---|---|---|---|---|---|---|---|---|
@@ -117,6 +163,8 @@ Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI“ der Muste
 |---|---|
 | `wofl` / `wohnflaeche` | Räume mit Wohnflächenanrechnung (WoFlV-Kategorie ≠ „keine“) |
 | `nebenflaeche` | Räume ohne Wohnflächenanrechnung |
+| `dg` / `normal` | Dachgeschosse bzw. Normalgeschosse (Geschossart) |
+| `dach` / `grundkoerper` | nur `koerper`: Dachkörper bzw. Grundkörper |
 | `hnf` / `nnf` | NUF 1–6 bzw. NUF 7 |
 | `nuf` / `tf` / `vf` | Nutzungsfläche, Technikfläche, Verkehrsfläche |
 | `r` / `s` | Raumumschließung Regel- bzw. Sonderfall |

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Point } from '../core/geometry';
 import type { Project, Shape, ShapeKind, Storey } from '../core/model';
 import { createProject, createStorey, newId } from '../core/model';
-import { parseProject } from '../core/serialize';
+import { parseProject, parseProjectData } from '../core/serialize';
 
 export type Tool = 'select' | 'polygon' | 'rect' | 'detect' | 'measure' | 'calibrate';
 
@@ -145,6 +145,7 @@ export const useEditor = create<EditorState>((set, get) => {
         selectedShapeId: null,
         tool: 'select',
         fitRequest: get().fitRequest + 1,
+        ifcModel: null,
       });
     },
     newProject: () => get().loadProject(createProject()),
@@ -264,6 +265,19 @@ function loadDetectSettings(): DetectSettings {
   }
 }
 
+/** Mitgespeichertes IFC-Modell im Hintergrund wieder für die 3D-Ansicht aufbereiten */
+export async function restoreIfcModel(p: Project) {
+  const ifc = p.dateien?.filter((d) => d.art === 'ifc').pop();
+  if (!ifc) return;
+  try {
+    const { loadIfc, ifcReference } = await import('../platform/ifc');
+    const x = await loadIfc(ifc.daten.slice());
+    if (useEditor.getState().project === p) useEditor.getState().setIfcModel(ifcReference(x, ifc.name));
+  } catch {
+    // nur Anzeige – das Projekt selbst ist vollständig geladen
+  }
+}
+
 /*
  * Autosave in IndexedDB (deutlich mehr Platz als localStorage – wichtig bei Planbildern).
  * Beim Start wird der letzte Stand asynchron geladen, solange noch nichts bearbeitet wurde.
@@ -281,16 +295,16 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGet(key: string): Promise<string | undefined> {
+async function idbGet(key: string): Promise<unknown> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
-    req.onsuccess = () => resolve(req.result as string | undefined);
+    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function idbSet(key: string, value: string): Promise<void> {
+async function idbSet(key: string, value: unknown): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
@@ -315,8 +329,10 @@ if (typeof indexedDB !== 'undefined') {
     .then((raw) => {
       const st = useEditor.getState();
       if (!raw || st.past.length || st.dirty) return;
-      const p = parseProject(raw);
+      // bis 0.2 als JSON-Text, seither als Objekt (Originaldateien als Uint8Array)
+      const p = typeof raw === 'string' ? parseProject(raw) : parseProjectData(raw);
       st.loadProject(p);
+      void restoreIfcModel(p);
     })
     .catch(() => {
       // kein Autosave vorhanden oder nicht lesbar
@@ -328,8 +344,7 @@ useEditor.subscribe((s, prev) => {
   if (s.project === prev.project) return;
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => {
-    const json = JSON.stringify(s.project);
-    idbSet(AUTOSAVE_KEY, json)
+    idbSet(AUTOSAVE_KEY, s.project)
       .then(() => {
         try {
           localStorage.removeItem(AUTOSAVE_KEY);

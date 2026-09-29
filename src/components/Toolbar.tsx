@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { computeProject } from '../core/calc';
 import { projectToCsv } from '../core/export';
-import { parseProject, ProjectFormatError, serializeProject } from '../core/serialize';
-import { isTauri, openTextFile, saveTextFile } from '../platform/files';
+import { ARCHIV_ENDUNGEN, readProjectFile, writeArchive } from '../core/archive';
+import { ProjectFormatError } from '../core/serialize';
+import { isTauri, pickFile, saveBinaryFile, saveTextFile } from '../platform/files';
+import { mitVorlage } from '../platform/vorlage';
 import type { Tool } from '../store/store';
-import { useEditor } from '../store/store';
+import { restoreIfcModel, useEditor } from '../store/store';
 import { IfcImportDialog } from './IfcImportDialog';
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
@@ -38,10 +40,12 @@ export function Toolbar() {
 
   const onOpen = async () => {
     if (!confirmDiscard()) return;
-    const f = await openTextFile('.json,application/json');
+    const f = await pickFile(`${ARCHIV_ENDUNGEN.map((e) => `.${e}`).join(',')},.json,application/json`);
     if (!f) return;
     try {
-      st.loadProject(parseProject(f.text));
+      const p = readProjectFile(new Uint8Array(await f.arrayBuffer()));
+      st.loadProject(p);
+      void restoreIfcModel(p);
     } catch (e) {
       alert(e instanceof ProjectFormatError ? e.message : `Datei konnte nicht geladen werden: ${String(e)}`);
     }
@@ -50,12 +54,13 @@ export function Toolbar() {
   const onSave = async () => {
     const p = useEditor.getState().project;
     try {
-      const ok = await saveTextFile({
-        defaultName: `${safeFileName(p.name)}.flaeche.json`,
-        contents: serializeProject(p),
+      const ok = await saveBinaryFile({
+        defaultName: `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`,
+        data: writeArchive(mitVorlage(p), { app: __APP_VERSION__ }),
         filterName: 'Flächenprojekt',
-        extension: 'json',
-        mime: 'application/json',
+        extension: ARCHIV_ENDUNGEN[0],
+        moreExtensions: ARCHIV_ENDUNGEN.slice(1),
+        mime: 'application/zip',
       });
       if (ok) st.markSaved();
     } catch (e) {

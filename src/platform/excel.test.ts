@@ -78,7 +78,7 @@ describe('Excel-Export mit Vorlage', () => {
     const p = project();
     const res = computeProject(p);
     const wb = await load(await exportWithTemplate(await buildSampleTemplate(), p, res));
-    const ws = wb.getWorksheet('BRI')!;
+    const ws = wb.getWorksheet('BRI Teilkörper')!;
     const rows: { geschoss: string; teil: string; v: number }[] = [];
     let current = '';
     let total: string | null = null;
@@ -102,6 +102,35 @@ describe('Excel-Export mit Vorlage', () => {
     expect(total).toMatch(/^SUM\(I\d+(,I\d+)+\)$/);
     const totRow = ws.getRows(11, 60)!.find((r) => r.getCell(1).value === 'Brutto-Rauminhalt gesamt')!;
     expect(Math.abs((totRow.getCell(9).value as { result: number }).result - res.total.bri.total)).toBeLessThan(0.05);
+  });
+
+  it('BRI: Normalgeschosse Höhe × BGF, Dachgeschoss mit Dachformel', async () => {
+    const p = createProject('Sanierung EFH Sander');
+    const kg = p.storeys[0];
+    kg.name = 'Kellergeschoss I';
+    kg.hoehe = 2.4;
+    kg.shapes.push(createOutline(rectPoints({ x: 0, y: 0 }, { x: 10, y: 4.869 })));
+    const eg = createStorey('Erdgeschoss', 3.45);
+    eg.shapes.push(createOutline(rectPoints({ x: 0, y: 0 }, { x: 12, y: 10.75 })));
+    const dg = createStorey('DG', 3);
+    const dach = createOutline(rectPoints({ x: 0, y: 0 }, { x: 12, y: 10.75 }));
+    dach.dach = { ...defaultDach('walm', 0), neigung: 45 };
+    dg.shapes.push(dach);
+    p.storeys.push(eg, dg);
+    const res = computeProject(p);
+    const ws = (await load(await exportWithTemplate(await buildSampleTemplate(), p, res))).getWorksheet('BRI')!;
+    expect([val(ws, 'B11'), val(ws, 'C11'), val(ws, 'D11'), formula(ws, 'E11')]).toEqual(['Kellergeschoss I', 2.4, 48.69, 'C11*D11']);
+    expect([val(ws, 'B12'), val(ws, 'C12'), val(ws, 'D12'), formula(ws, 'E12')]).toEqual(['Erdgeschoss', 3.45, 129, 'C12*D12']);
+    expect(formula(ws, 'F13')).toBe('SUM(E11:E12)');
+    expect(val(ws, 'A15')).toBe('DG');
+    expect(val(ws, 'B16')).toBe('Walmdach');
+    expect(val(ws, 'B17')).toBe('H: 5,375 m; B: 10,75 m; L: 12,00 m');
+    expect(val(ws, 'D19')).toBe('B × H × (3 × L − B) / 6 =');
+    expect(val(ws, 'D20')).toBe('10,75 × 5,375 × (3 × 12 − 10,75) / 6 =');
+    expect(val(ws, 'E20')).toBeCloseTo(243.16, 2);
+    expect(formula(ws, 'F22')).toBe('SUM(E20:E20)');
+    expect(val(ws, 'A24')).toBe('Brutto-Rauminhalt gesamt');
+    expect((ws.getCell('F24').value as { result: number }).result).toBeCloseTo(res.total.bri.total, 1);
   });
 
   it('erzeugt das Standardlayout inkl. BRI-Rechenweg', async () => {
