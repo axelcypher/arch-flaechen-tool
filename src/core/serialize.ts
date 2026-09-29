@@ -1,13 +1,13 @@
-import type { Background, Nutzungsgruppe, Project, RasterBackground, Shape, Storey, VectorBackground, WoflKategorie } from './model';
+import type { Background, DateiArt, Nutzungsgruppe, Project, ProjektDatei, RasterBackground, Shape, Storey, VectorBackground, WoflKategorie } from './model';
 import { createProject, newId } from './model';
 import { NUTZUNGSGRUPPEN, WOFL_KATEGORIEN } from './norms';
 import type { Dach, DachTyp } from './roof';
 import { DACH_TYPEN } from './roof';
 
-export const FILE_EXTENSION = 'flaeche.json';
-
+/** Reine JSON-Fassung (ohne mitgespeicherte Originaldateien – dafür das Projektarchiv, siehe archive.ts) */
 export function serializeProject(p: Project): string {
-  return JSON.stringify(p, null, 2);
+  const { dateien: _, ...rest } = p;
+  return JSON.stringify(rest, null, 2);
 }
 
 export class ProjectFormatError extends Error {}
@@ -23,6 +23,11 @@ export function parseProject(json: string): Project {
   } catch {
     throw new ProjectFormatError('Die Datei ist kein gültiges JSON.');
   }
+  return parseProjectData(raw);
+}
+
+/** Wie parseProject, aber für bereits gelesene Daten (Archiv, Autosave mit Originaldateien als Uint8Array) */
+export function parseProjectData(raw: unknown): Project {
   if (!isObj(raw) || raw.format !== 'arch-flaechen-tool') {
     throw new ProjectFormatError('Die Datei ist keine Projektdatei des Flächenrechners.');
   }
@@ -40,10 +45,21 @@ export function parseProject(json: string): Project {
     storeys: storeysRaw.filter(isObj).map(normalizeStorey),
   };
   if (project.storeys.length === 0) project.storeys = base.storeys;
+  if (Array.isArray(raw.dateien)) {
+    const dateien = raw.dateien.filter(isObj).map(normalizeDatei).filter((d): d is ProjektDatei => d !== null);
+    if (dateien.length) project.dateien = dateien;
+  }
   if (isObj(raw.dachModell) && Array.isArray(raw.dachModell.triangles)) {
     project.dachModell = { name: str(raw.dachModell.name, 'Modell'), triangles: raw.dachModell.triangles.filter((v): v is number => typeof v === 'number') };
   }
   return project;
+}
+
+const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage'];
+
+function normalizeDatei(d: Record<string, unknown>): ProjektDatei | null {
+  if (!(d.daten instanceof Uint8Array) || !DATEI_ARTEN.includes(d.art as DateiArt)) return null;
+  return { id: str(d.id, newId('df')), name: str(d.name, 'Datei'), art: d.art as DateiArt, datum: str(d.datum, ''), daten: d.daten };
 }
 
 function normalizeStorey(s: Record<string, unknown>): Storey {
@@ -55,6 +71,8 @@ function normalizeStorey(s: Record<string, unknown>): Storey {
     elevation: typeof s.elevation === 'number' && Number.isFinite(s.elevation) ? s.elevation : undefined,
     shapes,
   };
+  if (typeof s.dachgeschoss === 'boolean') storey.dachgeschoss = s.dachgeschoss;
+  if (s.geschosshoeheBegrenzt === true) storey.geschosshoeheBegrenzt = true;
   const bg = normalizeBackground(s.background);
   if (bg) storey.background = bg;
   return storey;
@@ -108,7 +126,14 @@ function normalizeDach(d: unknown): Dach | undefined {
 
 function normalizeBackground(b: unknown): Background | undefined {
   if (!isObj(b)) return undefined;
-  const base = { name: str(b.name, 'Plan'), x: num(b.x, 0), y: num(b.y, 0), opacity: num(b.opacity, 0.6), visible: b.visible !== false };
+  const base = {
+    name: str(b.name, 'Plan'),
+    x: num(b.x, 0),
+    y: num(b.y, 0),
+    opacity: num(b.opacity, 0.6),
+    visible: b.visible !== false,
+    ...(typeof b.quelle === 'string' ? { quelle: b.quelle } : {}),
+  };
   // Version 0.1: Rasterbilder ohne "type"
   if ((b.type === 'raster' || b.type === undefined) && typeof b.dataUrl === 'string') {
     const r: RasterBackground = {

@@ -67,6 +67,8 @@ export type ShapeKind = Shape['kind'];
 
 interface BackgroundBase {
   name: string;
+  /** Originaldatei (PDF, DXF) in Project.dateien – wird im Projektarchiv mitgespeichert */
+  quelle?: string;
   /** Weltkoordinate des lokalen Ursprungs (Raster: linke obere Bildecke) */
   x: number;
   y: number;
@@ -136,6 +138,8 @@ export interface Storey {
   elevation?: number;
   /** Dach aus Modell: Rauminhalt höchstens bis zur Geschosshöhe (nicht bis unter die Dachhaut erweitern) */
   geschosshoeheBegrenzt?: boolean;
+  /** Geschossart für Auswertung und Vorlagen; ohne Angabe automatisch (siehe istDachgeschoss) */
+  dachgeschoss?: boolean;
   shapes: Shape[];
   background?: Background;
 }
@@ -154,6 +158,19 @@ export interface ProjectMeta {
   bearbeiter: string;
 }
 
+/** Art einer mitgespeicherten Originaldatei */
+export type DateiArt = 'ifc' | 'dxf' | 'pdf' | 'vorlage';
+
+/** Originaldatei eines Imports bzw. die Excel-Vorlage des Projekts – im Archiv unter quellen/ abgelegt */
+export interface ProjektDatei {
+  id: string;
+  name: string;
+  art: DateiArt;
+  /** Datum der Übernahme (TT.MM.JJJJ) */
+  datum: string;
+  daten: Uint8Array;
+}
+
 export interface Project {
   format: 'arch-flaechen-tool';
   version: 1;
@@ -163,6 +180,8 @@ export interface Project {
   storeys: Storey[];
   /** Dachhaut aus einem importierten Gebäudemodell (IFC) für Dächer vom Typ "modell" */
   dachModell?: DachModell;
+  /** Originaldateien der Importe (IFC, DXF, PDF) und die Excel-Vorlage */
+  dateien?: ProjektDatei[];
 }
 
 let idCounter = 0;
@@ -204,6 +223,31 @@ export function createRoom(points: Point[], nummer: string, name = 'Raum'): Room
   };
 }
 
+/**
+ * Fügt eine Originaldatei hinzu; eine inhaltsgleiche Datei (z. B. dasselbe PDF für mehrere Geschosse)
+ * wird wiederverwendet. Liefert das Projekt und die ID der Datei.
+ */
+export function addDatei(p: Project, name: string, art: DateiArt, daten: Uint8Array): { project: Project; id: string } {
+  const same = p.dateien?.find((d) => d.art === art && d.name === name && gleicheBytes(d.daten, daten));
+  if (same) return { project: p, id: same.id };
+  const d: ProjektDatei = { id: newId('df'), name, art, datum: new Date().toLocaleDateString('de-DE'), daten };
+  // es gibt nur eine Excel-Vorlage je Projekt
+  const rest = (p.dateien ?? []).filter((x) => art !== 'vorlage' || x.art !== 'vorlage');
+  return { project: { ...p, dateien: [...rest, d] }, id: d.id };
+}
+
+function gleicheBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/** Nur noch benötigte Originaldateien: PDF/DXF, auf die ein Plan verweist, alle IFC-Modelle und die Vorlage */
+export function benutzteDateien(p: Project): ProjektDatei[] {
+  const refs = new Set(p.storeys.map((s) => s.background?.quelle).filter(Boolean));
+  return (p.dateien ?? []).filter((d) => d.art === 'ifc' || d.art === 'vorlage' || refs.has(d.id));
+}
+
 /** Fußbodenhöhen aller Geschosse (explizit oder als Summe der Geschosshöhen, unterstes Geschoss = 0) */
 export function storeyElevations(p: Project): number[] {
   const out: number[] = [];
@@ -214,6 +258,15 @@ export function storeyElevations(p: Project): number[] {
     z = e + s.hoehe;
   }
   return out;
+}
+
+/**
+ * Dachgeschoss? Ohne ausdrückliche Angabe gilt ein Geschoss als Dachgeschoss, sobald einer seiner
+ * BGF-Umrisse ein geneigtes Dach (oder ein Dach aus dem IFC-Modell) trägt.
+ */
+export function istDachgeschoss(s: Storey): boolean {
+  if (s.dachgeschoss !== undefined) return s.dachgeschoss;
+  return s.shapes.some((sh) => sh.kind === 'outline' && !sh.subtract && sh.dach !== undefined && sh.dach.typ !== 'flach');
 }
 
 /** Anrechenbare Grundfläche eines Raums (Polygonfläche abzüglich Putzabzug) */

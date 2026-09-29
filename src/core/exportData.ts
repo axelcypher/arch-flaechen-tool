@@ -1,8 +1,9 @@
 import type { AreaTotals, ProjectResult } from './calc';
 import { polygonArea } from './geometry';
 import type { Project } from './model';
+import { istDachgeschoss } from './model';
 import { NUF_IDS, NUTZUNGSGRUPPEN, nutzungInfo, WOFL_KATEGORIEN } from './norms';
-import { briRechenweg } from './rechenweg';
+import { briKoerper, briRechenweg } from './rechenweg';
 
 /**
  * Datengrundlage für Excel-Export und Vorlagen (Syntax siehe docs/excel-vorlagen.md).
@@ -20,7 +21,7 @@ export type Value = string | number;
 /** Datensatz; Schlüssel mit „_“ sind intern (Zuordnung in Blöcken) */
 export type Row = Record<string, Value>;
 
-export const COLLECTIONS = ['geschoss', 'raum', 'wohnung', 'nutzung', 'bri'] as const;
+export const COLLECTIONS = ['geschoss', 'raum', 'wohnung', 'nutzung', 'bri', 'koerper'] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
 export interface ExportContext {
@@ -66,6 +67,8 @@ export function buildExportContext(project: Project, result: ProjectResult, date
   };
 
   const shapesById = new Map(project.storeys.flatMap((st) => st.shapes.map((sh) => [sh.id, sh] as const)));
+  // Geschossart: „ja“ bei Dachgeschossen – für Filter [dg] / [normal] in allen Sammlungen
+  const dg = new Map(project.storeys.map((st) => [st.id, istDachgeschoss(st) ? 'ja' : ''] as const));
   let nr = 0;
   const raum: Row[] = result.storeys.flatMap((s) =>
     s.rooms.map((r) => {
@@ -76,6 +79,7 @@ export function buildExportContext(project: Project, result: ProjectResult, date
         _geschossId: s.storeyId,
         nr: ++nr,
         geschoss: r.storeyName,
+        dachgeschoss: dg.get(s.storeyId) ?? '',
         nummer: r.nummer,
         name: r.name,
         nutzung: nutzungInfo(r.nutzung).kurz,
@@ -104,6 +108,8 @@ export function buildExportContext(project: Project, result: ProjectResult, date
       _id: s.storeyId,
       nr: i + 1,
       name: s.name,
+      dachgeschoss: dg.get(s.storeyId) ?? '',
+      art: dg.get(s.storeyId) ? 'Dachgeschoss' : 'Normalgeschoss',
       hoehe: r2(s.hoehe),
       anzahl_raeume: s.rooms.length,
       ...totalsRow(s),
@@ -131,6 +137,7 @@ export function buildExportContext(project: Project, result: ProjectResult, date
   const bri: Row[] = briRechenweg(project).map((b) => ({
     _geschossId: b.geschossId,
     geschoss: b.geschoss,
+    dachgeschoss: dg.get(b.geschossId) ?? '',
     umriss: b.umriss,
     umschliessung: b.umschliessung,
     nr: b.nr,
@@ -145,9 +152,29 @@ export function buildExportContext(project: Project, result: ProjectResult, date
     formel: b.formel,
   }));
 
+  const koerper: Row[] = briKoerper(project).map((k) => ({
+    _geschossId: k.geschossId,
+    geschoss: k.geschoss,
+    dachgeschoss: dg.get(k.geschossId) ?? '',
+    umriss: k.umriss,
+    umschliessung: k.umschliessung,
+    nr: k.nr,
+    art: k.art === 'dach' ? 'Dach' : 'Grundkörper',
+    bezeichnung: k.bezeichnung,
+    parameter: k.parameter,
+    formel: k.formel,
+    rechnung: k.rechnung,
+    flaeche: r2(k.flaeche),
+    hoehe: r3(k.hoehe),
+    laenge: k.laenge !== undefined ? r3(k.laenge) : '',
+    breite: k.breite !== undefined ? r3(k.breite) : '',
+    neigung: k.neigung !== undefined ? r2(k.neigung) : '',
+    volumen: r2(k.volumen),
+  }));
+
   return {
     scalars,
-    collections: { geschoss, raum, wohnung, nutzung, bri },
+    collections: { geschoss, raum, wohnung, nutzung, bri, koerper },
     byName: {
       geschoss: new Map(geschoss.map((g) => [String(g.name), g])),
       wohnung: new Map(wohnung.map((w) => [String(w.name), w])),
@@ -160,10 +187,12 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
   {
     group: 'Blöcke, Filter, Modifikatoren',
     keys: [
-      ['#geschoss … /geschoss', 'Zeilenblock je Geschoss (Markierung in eigener Zeile oder in der ersten/letzten Blockzeile); ebenso #wohnung, #nutzung, #raum'],
-      ['raum-/bri-Zeilen im Block', 'laufen nur über die Räume bzw. Rechenschritte des aktuellen Geschosses; leere Blöcke entfallen'],
+      ['#geschoss … /geschoss', 'Zeilenblock je Geschoss (Markierung in eigener Zeile oder in der ersten/letzten Blockzeile); ebenso #wohnung, #nutzung, #raum, #koerper'],
+      ['raum-/bri-/koerper-Zeilen im Block', 'laufen nur über die Räume bzw. Körper des aktuellen Geschosses; leere Blöcke entfallen'],
       ['raum[wofl] / raum[nebenflaeche]', 'Filter: Räume mit bzw. ohne Wohnflächenanrechnung'],
       ['raum[hnf] / raum[nnf] / [nuf] [tf] [vf]', 'Filter nach Nutzungsgruppe (HNF = NUF 1–6, NNF = NUF 7)'],
+      ['geschoss[dg] / geschoss[normal]', 'Filter: Dachgeschosse bzw. Normalgeschosse (gilt ebenso für raum, bri, koerper)'],
+      ['koerper[dach] / koerper[grundkoerper]', 'Filter: Dachkörper bzw. Grundkörper (Quader)'],
       ['[r] [s] [abzug] [feld=wert] [!filter]', 'weitere Filter, mehrere mit Komma: raum[wofl,geschoss=EG]'],
       ['…|einmal', 'Wert nur in der ersten Zeile der Wiederholung, z. B. geschoss.name|einmal'],
     ],
@@ -191,6 +220,7 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
       ['nebenflaeche', 'Summe der Räume ohne Wohnflächenanrechnung [m²]'],
       ['anzahl_raeume', 'Anzahl Räume'],
       ['name, hoehe, nr', 'nur geschoss.*: Bezeichnung, Geschosshöhe, laufende Nr.'],
+      ['dachgeschoss, art', 'nur geschoss.*: „ja“ bei Dachgeschossen; „Dachgeschoss“ bzw. „Normalgeschoss“'],
     ],
   },
   {
@@ -228,6 +258,22 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
       ['bri.faktor', 'Formfaktor (1 Quader, 0,5 Prisma/Keil, 0,333 Pyramide …)'],
       ['bri.volumen', 'anzahl × flaeche × hoehe × faktor [m³]'],
       ['bri.formel', 'Rechenweg als Text, z. B. „12,00 × 9,00 × 3,151 × ½“'],
+    ],
+  },
+  {
+    group: 'koerper.* (BRI mit geschlossenen Formeln, Zeile je Körper – Normalgeschosse Höhe × BGF, Dächer als ganzer Körper)',
+    keys: [
+      ['koerper.geschoss, koerper.umriss, koerper.nr', 'Geschoss, BGF-Umriss, laufende Nummer im Geschoss'],
+      ['koerper.art', '„Grundkörper“ (Quader bis Geschosshöhe bzw. Traufe) oder „Dach“'],
+      ['koerper.bezeichnung', 'z. B. „Quader“, „Grundkörper bis Traufe“, „Walmdach“'],
+      ['koerper.parameter', 'Maße als Text, z. B. „H: 5,375 m; B: 10,75 m; L: 12,00 m“'],
+      ['koerper.formel', 'Formel mit Formelzeichen, z. B. „B × H × (3 × L − B) / 6“'],
+      ['koerper.rechnung', 'Formel mit eingesetzten Werten, z. B. „10,75 × 5,38 × (3 × 12 − 10,75) / 6“'],
+      ['koerper.flaeche', 'Grundfläche [m²] (negativ bei Abzugsflächen)'],
+      ['koerper.hoehe', 'Höhe [m]: Grundkörper = Geschoss-/Traufhöhe, Dach = Höhe über Traufe'],
+      ['koerper.laenge, koerper.breite, koerper.neigung', 'Länge (Firstrichtung), Breite [m], Dachneigung [°]'],
+      ['koerper.volumen', 'Volumen [m³]; Summe aller Körper = BRI'],
+      ['koerper.dachgeschoss', '„ja“, wenn der Körper in einem Dachgeschoss liegt'],
     ],
   },
   {
@@ -269,6 +315,13 @@ const NAMED_FILTERS: Record<string, (r: Row) => boolean> = {
   r: (r) => r.umschliessung === 'R',
   s: (r) => r.umschliessung === 'S',
   abzug: (r) => r.abzug === 'Abzug',
+  dg: (r) => r.dachgeschoss === 'ja',
+  dachgeschoss: (r) => r.dachgeschoss === 'ja',
+  normal: (r) => r.dachgeschoss !== 'ja',
+  normalgeschoss: (r) => r.dachgeschoss !== 'ja',
+  dach: (r) => r.art === 'Dach',
+  grundkoerper: (r) => r.art === 'Grundkörper',
+  'grundkörper': (r) => r.art === 'Grundkörper',
 };
 
 export function parseFilters(spec: string | undefined): ((r: Row) => boolean)[] {
@@ -295,7 +348,7 @@ export function parseFilters(spec: string | undefined): ((r: Row) => boolean)[] 
 export function belongsTo(child: Collection, row: Row, parent: Collection, p: Row, ctx: ExportContext): boolean {
   if (child === parent) return row === p;
   if (parent === 'geschoss') {
-    if (child === 'raum' || child === 'bri') return row._geschossId === p._id;
+    if (child === 'raum' || child === 'bri' || child === 'koerper') return row._geschossId === p._id;
     if (child === 'wohnung') return ctx.collections.raum.some((r) => r._geschossId === p._id && r.wohnung === row.name);
   }
   if (parent === 'wohnung') {
@@ -303,7 +356,7 @@ export function belongsTo(child: Collection, row: Row, parent: Collection, p: Ro
     if (child === 'geschoss') return ctx.collections.raum.some((r) => r._geschossId === row._id && r.wohnung === p.name);
   }
   if (parent === 'nutzung' && child === 'raum') return row.nutzung === p.gruppe;
-  if (parent === 'raum' && child === 'geschoss') return row._id === p._geschossId;
+  if ((parent === 'raum' || parent === 'bri' || parent === 'koerper') && child === 'geschoss') return row._id === p._geschossId;
   return true;
 }
 

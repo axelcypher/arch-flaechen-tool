@@ -3,7 +3,7 @@ import { computeProject, computeStorey } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { isSelfIntersecting, perimeter } from '../core/geometry';
 import type { Nutzungsgruppe, Raumumschliessung, Shape, WoflKategorie } from '../core/model';
-import { shapeArea } from '../core/model';
+import { istDachgeschoss, shapeArea } from '../core/model';
 import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflArt, woflFaktor } from '../core/norms';
 import { mapShape, mapStorey, useActiveStorey, useEditor, useSelectedShape } from '../store/store';
 import { BackgroundPanel } from './BackgroundPanel';
@@ -238,6 +238,16 @@ function StoreyProperties() {
         </Field>
       </div>
       <p className="muted small-text">Die Geschosshöhe (OK Rohfußboden bis OK Rohfußboden darüber bzw. OK Dachbelag) wird für den BRI verwendet.</p>
+      <Field label="Geschossart" hint="für Excel-Vorlagen: Normalgeschosse als Höhe × BGF, Dachgeschosse mit Dachformeln (Filter [normal] / [dg])">
+        <select
+          value={storey.dachgeschoss === undefined ? 'auto' : storey.dachgeschoss ? 'dg' : 'normal'}
+          onChange={(e) => upd((s) => ({ ...s, dachgeschoss: e.target.value === 'auto' ? undefined : e.target.value === 'dg' }))}
+        >
+          <option value="auto">automatisch ({istDachgeschoss({ ...storey, dachgeschoss: undefined }) ? 'Dachgeschoss' : 'Normalgeschoss'})</option>
+          <option value="normal">Normalgeschoss</option>
+          <option value="dg">Dachgeschoss</option>
+        </select>
+      </Field>
       {project.dachModell && (
         <label className="toggle block" title="Ohne Haken reicht der Rauminhalt dort, wo darüber keine BGF liegt (z. B. Dachspitze als eigenes Geschoss), bis unter die Dachhaut.">
           <input type="checkbox" checked={!!storey.geschosshoeheBegrenzt} onChange={(e) => upd((s) => ({ ...s, geschosshoeheBegrenzt: e.target.checked || undefined }))} />

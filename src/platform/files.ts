@@ -39,6 +39,8 @@ export interface SaveBinaryOptions {
   data: Uint8Array;
   filterName: string;
   extension: string;
+  /** weitere gleichwertige Endungen für den Dateifilter */
+  moreExtensions?: string[];
   mime: string;
 }
 
@@ -50,7 +52,7 @@ export async function saveBinaryFile(o: SaveBinaryOptions): Promise<boolean> {
       defaultName: o.defaultName,
       contentsBase64: bytesToBase64(o.data),
       filterName: o.filterName,
-      extensions: [o.extension],
+      extensions: [o.extension, ...(o.moreExtensions ?? [])],
     });
     return path != null;
   }

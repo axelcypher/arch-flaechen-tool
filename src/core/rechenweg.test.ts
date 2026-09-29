@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { outlineVolume } from './calc';
 import { rectPoints } from './geometry';
 import type { OutlineShape } from './model';
-import { createOutline, createProject } from './model';
-import { briRechenweg, outlineTeile } from './rechenweg';
+import { createOutline, createProject, istDachgeschoss } from './model';
+import { briKoerper, briRechenweg, outlineTeile } from './rechenweg';
 import type { Dach, DachTyp } from './roof';
 import { DACH_TYPEN, defaultDach } from './roof';
 
@@ -73,5 +73,52 @@ describe('BRI-Rechenweg', () => {
     expect(abzug.anzahl).toBe(-1);
     expect(abzug.volumen).toBeCloseTo(-12, 9);
     expect(abzug.formel.startsWith('− ')).toBe(true);
+  });
+});
+
+/** Rechnung als Text („10,75 × 5,375 × (3 × 12 − 10,75) / 6“) nachrechnen */
+const nachrechnen = (s: string) => Function(`return ${s.replace(/×/g, '*').replace(/−/g, '-').replace(/,/g, '.')}`)() as number;
+
+describe('BRI-Körper mit geschlossenen Formeln', () => {
+  for (const typ of DACH_TYPEN.map((d) => d.id) as DachTyp[]) {
+    for (const [name, pts] of [
+      ['Rechteck', rect],
+      ['L-Form', lForm],
+    ] as const) {
+      it(`${typ} (${name}): Summe der Körper = BRI, Rechnung nachprüfbar`, () => {
+        const { p, st, o } = setup(pts, defaultDach(typ, 1.2));
+        const k = briKoerper(p);
+        expect(k.reduce((a, x) => a + x.volumen, 0)).toBeCloseTo(outlineVolume(o, st, p), 6);
+        for (const x of k) expect(nachrechnen(x.rechnung)).toBeCloseTo(x.volumen, 1);
+      });
+    }
+  }
+
+  it('Walmdach mit gleicher Neigung wie in der Büro-Vorlage', () => {
+    const { p } = setup(rectPoints({ x: 0, y: 0 }, { x: 12, y: 10.75 }), { ...defaultDach('walm', 0), neigung: 45 });
+    const [dach] = briKoerper(p);
+    expect(dach).toMatchObject({ art: 'dach', bezeichnung: 'Walmdach', formel: 'B × H × (3 × L − B) / 6', parameter: 'H: 5,375 m; B: 10,75 m; L: 12,00 m' });
+    expect(dach.rechnung).toBe('10,75 × 5,375 × (3 × 12 − 10,75) / 6');
+    expect(dach.volumen).toBeCloseTo((10.75 * 5.375 * (3 * 12 - 10.75)) / 6, 9);
+  });
+
+  it('Normalgeschoss: Quader Höhe × Fläche, Abzugsflächen negativ', () => {
+    const { p, st } = setup(rect);
+    st.shapes.push({ ...createOutline(rectPoints({ x: 0, y: 0 }, { x: 2, y: 2 })), subtract: true });
+    const k = briKoerper(p);
+    expect(k.map((x) => [x.art, x.formel, x.flaeche, x.hoehe, x.volumen])).toEqual([
+      ['grundkoerper', 'L × B × H', 108, 3, 324],
+      ['grundkoerper', 'L × B × H', -4, 3, -12],
+    ]);
+    expect(k[1].rechnung).toBe('− 2 × 2 × 3');
+  });
+
+  it('Dachgeschoss: automatisch bei geneigtem Dach, manuell übersteuerbar', () => {
+    const { st } = setup(rect, defaultDach('sattel', 1));
+    expect(istDachgeschoss(st)).toBe(true);
+    expect(istDachgeschoss({ ...st, dachgeschoss: false })).toBe(false);
+    const flach = setup(rect, defaultDach('flach', 3)).st;
+    expect(istDachgeschoss(flach)).toBe(false);
+    expect(istDachgeschoss({ ...flach, dachgeschoss: true })).toBe(true);
   });
 });

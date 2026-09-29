@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { bgScale } from '../core/background';
 import { DXF_UNITS, decodeDxfText, importDxf } from '../core/dxf';
 import { fmt2 } from '../core/format';
-import type { Background, Storey } from '../core/model';
+import type { Background, DateiArt, Storey } from '../core/model';
+import { addDatei } from '../core/model';
 import { imageSize, pickFile, readAsDataUrl } from '../platform/files';
 import type { PdfDocumentHandle } from '../platform/pdf';
 import { openPdf } from '../platform/pdf';
@@ -16,9 +17,15 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
   const st = useEditor.getState();
   const bg = storey.background;
   const [busy, setBusy] = useState<string | null>(null);
-  const [pdf, setPdf] = useState<{ doc: PdfDocumentHandle; name: string } | null>(null);
+  const [pdf, setPdf] = useState<{ doc: PdfDocumentHandle; name: string; bytes: Uint8Array } | null>(null);
 
   const setBg = (b: Background | undefined) => st.update((p) => mapStorey(p, storey.id, (s) => ({ ...s, background: b })));
+  /** Plan setzen und die Originaldatei fürs Projektarchiv mitnehmen */
+  const setBgMitQuelle = (b: Background, name: string, art: DateiArt, bytes: Uint8Array) =>
+    st.update((p) => {
+      const { project, id } = addDatei(p, name, art, bytes);
+      return mapStorey(project, storey.id, (s) => ({ ...s, background: { ...b, quelle: id } }));
+    });
   const patchBg = (patch: Partial<Background>) => bg && setBg({ ...bg, ...patch } as Background);
 
   const afterLoad = (calibrate: boolean) => {
@@ -33,13 +40,16 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
     try {
       if (ext === 'pdf') {
         setBusy('PDF wird geöffnet …');
-        const doc = await openPdf(await f.arrayBuffer());
-        setPdf({ doc, name: f.name });
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        // pdf.js übergibt den Puffer an den Worker – Kopie für das Archiv behalten
+        const doc = await openPdf(bytes.slice().buffer);
+        setPdf({ doc, name: f.name, bytes });
       } else if (ext === 'dxf') {
         setBusy('DXF wird gelesen …');
         await new Promise((r) => setTimeout(r, 20));
-        const res = importDxf(decodeDxfText(await f.arrayBuffer()), f.name);
-        setBg(res.background);
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const res = importDxf(decodeDxfText(bytes.buffer), f.name);
+        setBgMitQuelle(res.background, f.name, 'dxf', bytes);
         afterLoad(false);
         if (!res.unitDetected) {
           alert(
@@ -67,19 +77,24 @@ export function BackgroundPanel({ storey }: { storey: Storey }) {
     try {
       const r = await pdf.doc.render(page);
       const mpp = massstab ? r.metersPerPixelAt1 * massstab : 20 / r.width;
-      setBg({
-        type: 'raster',
-        name: pdf.doc.numPages > 1 ? `${pdf.name} (S. ${page})` : pdf.name,
-        dataUrl: r.dataUrl,
-        widthPx: r.width,
-        heightPx: r.height,
-        x: 0,
-        y: 0,
-        metersPerPixel: mpp,
-        opacity: 0.6,
-        visible: true,
-        pdf: { page, metersPerPixelAt1: r.metersPerPixelAt1 },
-      });
+      setBgMitQuelle(
+        {
+          type: 'raster',
+          name: pdf.doc.numPages > 1 ? `${pdf.name} (S. ${page})` : pdf.name,
+          dataUrl: r.dataUrl,
+          widthPx: r.width,
+          heightPx: r.height,
+          x: 0,
+          y: 0,
+          metersPerPixel: mpp,
+          opacity: 0.6,
+          visible: true,
+          pdf: { page, metersPerPixelAt1: r.metersPerPixelAt1 },
+        },
+        pdf.name,
+        'pdf',
+        pdf.bytes,
+      );
       pdf.doc.destroy();
       setPdf(null);
       afterLoad(!massstab);

@@ -42,7 +42,10 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
   Maßstabsleiste, Legende, optional mit Hintergrundplan) und Raumliste je Geschoss
 - **Excel-Export** (.xlsx) im Standardlayout oder mit **eigener Vorlage** – siehe [docs/excel-vorlagen.md](docs/excel-vorlagen.md)
 - **CSV-Export** (Excel, Dezimalkomma)
-- Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB), Projektdateien `*.flaeche.json`
+- Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)
+- **Projektarchiv** `*.oap` bzw. `*.akhp` (gleiches Format, ZIP): Projekt, Planbilder, Dachmodell sowie die
+  Originaldateien der Importe (IFC, DXF, PDF) und die Excel-Vorlage – auf einem anderen Rechner vollständig
+  wieder zu öffnen, inkl. IFC-Modell in der 3D-Ansicht. Ältere `*.flaeche.json` lassen sich weiter öffnen.
 
 ### Tastenkürzel
 
