@@ -2,6 +2,8 @@ import { modellRoofParams, outlineVolume } from './calc';
 import type { Point } from './geometry';
 import { polygonArea } from './geometry';
 import type { OutlineShape, Project, Storey } from './model';
+import type { Gaube } from './gaube';
+import { gaubenLabel, gaubenMasse, gaubenMoeglich } from './gaube';
 import type { Dach } from './roof';
 import { autoFirstrichtung, DACH_TYPEN, isFrameRect, kreisabschnitt, roofFrame, roofStats } from './roof';
 import { meshRoofStats } from './roofMesh';
@@ -40,6 +42,8 @@ export interface BriSchritt {
   formel: string;
   /** Teil des Dachkörpers (über der Traufe) statt Grundkörper */
   dach?: boolean;
+  /** Teilkörper ist eine Gaube */
+  gaube?: Gaube;
 }
 
 type Teil = Omit<BriSchritt, 'geschossId' | 'geschoss' | 'umrissId' | 'umriss' | 'umschliessung' | 'nr' | 'volumen' | 'formel'>;
@@ -94,7 +98,23 @@ export function outlineTeile(s: OutlineShape, storey: Storey, project: Project):
     const dv = roofStats(d, pts).dachvolumen;
     teile.push({ bezeichnung: `${dachLabel}: Dachkörper über Traufe, Grundfläche × mittlere Höhe`, anzahl: 1, flaeche: A, hoehe: dv / A, faktor: 1, dach: true });
   }
+  teile.push(...gaubenTeile(d));
   return teile;
+}
+
+/** Gauben als Teilkörper: Grundfläche B × T, Höhe der Vorderwand über der Dachfläche, Formfaktor */
+function gaubenTeile(d: Dach): Teil[] {
+  if (!gaubenMoeglich(d)) return [];
+  return (d.gauben ?? []).flatMap((g) => {
+    const m = gaubenMasse(g, d);
+    if (m.volumen <= 1e-12) return [];
+    const B = g.breite;
+    const hoehe = m.hVorne + m.giebel;
+    const faktor = m.volumen / (B * m.tiefe * hoehe);
+    return [
+      { bezeichnung: g.name ? `${gaubenLabel(g.typ)} (${g.name})` : gaubenLabel(g.typ), anzahl: 1, laenge: B, breite: m.tiefe, flaeche: B * m.tiefe, hoehe, faktor, gaube: g },
+    ];
+  });
 }
 
 function grundkoerper(label: string, pts: Point[], A: number, h: number, angle: number, frame?: { u0: number; u1: number; v0: number; v1: number }): Teil {
@@ -111,7 +131,15 @@ function grundkoerper(label: string, pts: Point[], A: number, h: number, angle: 
 function rechteckDach(d: Dach, L: number, B: number, label: string): Teil[] | null {
   const t = Math.tan(rad(Math.min(Math.max(d.neigung, 0), 89)));
   const tw = Math.tan(rad(Math.min(Math.max(d.neigungWalm ?? d.neigung, 0), 89)));
-  const box = (bez: string, anzahl: number, l: number, b: number, hh: number, faktor: number): Teil => ({ bezeichnung: bez, anzahl, laenge: l, breite: b, flaeche: l * b, hoehe: hh, faktor });
+  const box = (bez: string, anzahl: number, l: number, b: number, hh: number, faktor: number): Teil => ({
+    bezeichnung: bez,
+    anzahl,
+    laenge: l,
+    breite: b,
+    flaeche: l * b,
+    hoehe: hh,
+    faktor,
+  });
 
   switch (d.typ) {
     case 'pult':
@@ -217,7 +245,7 @@ export interface BriKoerper {
   umschliessung: 'R' | 'S';
   /** laufende Nummer innerhalb des Geschosses */
   nr: number;
-  art: 'grundkoerper' | 'dach';
+  art: 'grundkoerper' | 'dach' | 'gaube';
   /** z. B. „Walmdach“, „Grundkörper bis Traufe“ */
   bezeichnung: string;
   /** Maße als Text, z. B. „H: 5,375 m; B: 10,75 m; L: 12,00 m“ */
@@ -266,7 +294,16 @@ export function einsetzen(formel: string, werte: Record<string, number>): string
 function dachFormel(d: Dach, L: number, B: number): DachFormel | null {
   const t = Math.tan(rad(Math.min(Math.max(d.neigung, 0), 89)));
   const tw = Math.tan(rad(Math.min(Math.max(d.neigungWalm ?? d.neigung, 0), 89)));
-  const prisma = (H: number): DachFormel => ({ formel: 'L × B × H / 2', werte: { L, B, H }, parameter: [['H', H], ['B', B], ['L', L]], hoehe: H });
+  const prisma = (H: number): DachFormel => ({
+    formel: 'L × B × H / 2',
+    werte: { L, B, H },
+    parameter: [
+      ['H', H],
+      ['B', B],
+      ['L', L],
+    ],
+    hoehe: H,
+  });
 
   switch (d.typ) {
     case 'pult':
@@ -280,8 +317,28 @@ function dachFormel(d: Dach, L: number, B: number): DachFormel | null {
       const a = w > 1e-12 ? H / w : Infinity;
       if (2 * a > L + 1e-9) return null;
       // gleiche Neigung aller Dachflächen: Walmtiefe = halbe Breite
-      if (Math.abs(2 * a - B) < 1e-6) return { formel: 'B × H × (3 × L − B) / 6', werte: { B, H, L }, parameter: [['H', H], ['B', B], ['L', L]], hoehe: H };
-      return { formel: 'B × H × (3 × L − 2 × a) / 6', werte: { B, H, L, a }, parameter: [['H', H], ['B', B], ['L', L], ['a (Walmtiefe)', a]], hoehe: H };
+      if (Math.abs(2 * a - B) < 1e-6)
+        return {
+          formel: 'B × H × (3 × L − B) / 6',
+          werte: { B, H, L },
+          parameter: [
+            ['H', H],
+            ['B', B],
+            ['L', L],
+          ],
+          hoehe: H,
+        };
+      return {
+        formel: 'B × H × (3 × L − 2 × a) / 6',
+        werte: { B, H, L, a },
+        parameter: [
+          ['H', H],
+          ['B', B],
+          ['L', L],
+          ['a (Walmtiefe)', a],
+        ],
+        hoehe: H,
+      };
     }
     case 'kruppelwalm': {
       const H = (B / 2) * t;
@@ -292,7 +349,14 @@ function dachFormel(d: Dach, L: number, B: number): DachFormel | null {
       return {
         formel: 'L × B × H / 2 − a × b × h / 3',
         werte: { L, B, H, a, b, h },
-        parameter: [['H', H], ['B', B], ['L', L], ['h (Krüppelwalm)', h], ['b', b], ['a', a]],
+        parameter: [
+          ['H', H],
+          ['B', B],
+          ['L', L],
+          ['h (Krüppelwalm)', h],
+          ['b', b],
+          ['a', a],
+        ],
         hoehe: H,
       };
     }
@@ -306,19 +370,46 @@ function dachFormel(d: Dach, L: number, B: number): DachFormel | null {
       return {
         formel: 'L × (Hu × (B − d) + Bo × Ho / 2)',
         werte: { L, Hu, B, d: dm, Bo, Ho },
-        parameter: [['Hu', Hu], ['Ho', Ho], ['B', B], ['Bo', Bo], ['d', dm], ['L', L]],
+        parameter: [
+          ['Hu', Hu],
+          ['Ho', Ho],
+          ['B', B],
+          ['Bo', Bo],
+          ['d', dm],
+          ['L', L],
+        ],
         hoehe: Hu + Ho,
       };
     }
     case 'tonne': {
       const f = Math.max(1e-6, d.stich ?? 1.5);
       const A = kreisabschnitt(B, f);
-      return { formel: 'L × A', werte: { L, A }, parameter: [['f (Stich)', f], ['B', B], ['L', L], ['A (Kreisabschnitt)', A, 'm²']], hoehe: f };
+      return {
+        formel: 'L × A',
+        werte: { L, A },
+        parameter: [
+          ['f (Stich)', f],
+          ['B', B],
+          ['L', L],
+          ['A (Kreisabschnitt)', A, 'm²'],
+        ],
+        hoehe: f,
+      };
     }
     case 'shed': {
       const n = Math.max(1, Math.round(d.shedAnzahl ?? 3));
       const h = Math.max(0, d.shedHoehe ?? 1.5);
-      return { formel: 'L × B × h / 2', werte: { L, B, h }, parameter: [['n', n, ''], ['h', h], ['B', B], ['L', L]], hoehe: h };
+      return {
+        formel: 'L × B × h / 2',
+        werte: { L, B, h },
+        parameter: [
+          ['n', n, ''],
+          ['h', h],
+          ['B', B],
+          ['L', L],
+        ],
+        hoehe: h,
+      };
     }
     default:
       return null;
@@ -344,7 +435,7 @@ export function briKoerper(project: Project): BriKoerper[] {
         umschliessung: s.umschliessung,
       };
 
-      for (const t of teile.filter((x) => !x.dach)) {
+      for (const t of teile.filter((x) => !x.dach && !x.gaube)) {
         const rect = t.laenge !== undefined && t.breite !== undefined;
         const formel = rect ? 'L × B × H' : 'A × H';
         out.push({
@@ -352,7 +443,18 @@ export function briKoerper(project: Project): BriKoerper[] {
           nr: ++nr,
           art: 'grundkoerper',
           bezeichnung: t.bezeichnung,
-          parameter: parameterText(rect ? [['H', t.hoehe], ['B', t.breite!], ['L', t.laenge!]] : [['H', t.hoehe], ['A', t.flaeche, 'm²']]),
+          parameter: parameterText(
+            rect
+              ? [
+                  ['H', t.hoehe],
+                  ['B', t.breite!],
+                  ['L', t.laenge!],
+                ]
+              : [
+                  ['H', t.hoehe],
+                  ['A', t.flaeche, 'm²'],
+                ],
+          ),
           formel,
           rechnung: minus + einsetzen(formel, rect ? { L: t.laenge!, B: t.breite!, H: t.hoehe } : { A: t.flaeche, H: t.hoehe }),
           flaeche: sign * t.flaeche,
@@ -364,46 +466,107 @@ export function briKoerper(project: Project): BriKoerper[] {
       }
 
       const dachTeile = teile.filter((x) => x.dach);
-      if (!dachTeile.length || !s.dach) continue;
-      const V = dachTeile.reduce((a, t) => a + vol(t), 0);
-      const A = polygonArea(s.points);
-      const d = s.dach;
-      const fr = d.typ === 'modell' ? null : roofFrame(d, s.points);
-      const L = fr ? fr.u1 - fr.u0 : 0;
-      const B = fr ? fr.v1 - fr.v0 : 0;
-      const df = fr && isFrameRect(fr, A) ? dachFormel(d, L, B) : null;
-      const common = {
-        ...base,
-        nr: ++nr,
-        art: 'dach' as const,
-        bezeichnung: d.typ === 'modell' ? 'Körper bis Dachhaut (IFC-Modell)' : (DACH_TYPEN.find((x) => x.id === d.typ)?.label ?? 'Dach'),
-        neigung: d.typ === 'modell' ? undefined : d.neigung,
-        volumen: sign * V,
-      };
-      if (df) {
-        out.push({
-          ...common,
-          parameter: parameterText(df.parameter),
-          formel: df.formel,
-          rechnung: minus + einsetzen(df.formel, df.werte),
-          flaeche: sign * L * B,
-          hoehe: df.hoehe,
-          laenge: L,
-          breite: B,
-        });
-      } else {
-        // unregelmäßiger Grundriss oder Dach aus dem Modell: Grundfläche × mittlere Höhe
-        const hm = A > 1e-12 ? V / A : 0;
-        out.push({
-          ...common,
-          parameter: parameterText([['A', A, 'm²'], ['hm (mittlere Höhe)', hm]]),
-          formel: 'A × hm',
-          rechnung: minus + einsetzen('A × hm', { A, hm }),
-          flaeche: sign * A,
-          hoehe: hm,
-        });
-      }
+      if (dachTeile.length && s.dach) out.push(dachKoerper(s, dachTeile, { ...base, nr: ++nr }, sign));
+      for (const t of teile.filter((x) => x.gaube)) out.push(gaubenKoerper(t, s.dach!, { ...base, nr: ++nr }, sign));
     }
   }
   return out;
+}
+
+type KoerperBasis = Pick<BriKoerper, 'geschossId' | 'geschoss' | 'umrissId' | 'umriss' | 'umschliessung' | 'nr'>;
+
+const zg = (v: number) => `${(Math.round(v * 100) / 100).toLocaleString('de-DE', { maximumFractionDigits: 2, useGrouping: false })}°`;
+
+/** Gaube mit ihrer Formel, z. B. Schleppgaube  B × T² × (tan α − tan β) / 2 */
+function gaubenKoerper(t: Teil, d: Dach, base: KoerperBasis, sign: number): BriKoerper {
+  const g = t.gaube!;
+  const m = gaubenMasse(g, d);
+  const minus = sign < 0 ? '− ' : '';
+  const B = g.breite;
+  let formel: string;
+  let rechnung: string;
+  let parameter: string;
+  if (g.typ === 'sattel') {
+    const gamma = Math.min(Math.max(g.dachneigung ?? 45, 0), 89);
+    formel = 'B × (h² + Hg × (h + Hg / 3)) / (2 × tan α)';
+    rechnung = `${zr(B)} × (${zr(m.hVorne)}² + ${zr(m.giebel)} × (${zr(m.hVorne)} + ${zr(m.giebel)} / 3)) / (2 × tan ${zg(m.alpha)})`;
+    parameter = `Hauptdach α: ${zg(m.alpha)}; Gaubendach γ: ${zg(gamma)}; ${parameterText([
+      ['h', m.hVorne],
+      ['Hg', m.giebel],
+      ['B', B],
+    ])}`;
+  } else if (g.typ === 'flach') {
+    formel = 'B × T² × tan α / 2';
+    rechnung = `${zr(B)} × ${zr(m.tiefe)}² × tan ${zg(m.alpha)} / 2`;
+    parameter = `Hauptdach α: ${zg(m.alpha)}; ${parameterText([
+      ['T', m.tiefe],
+      ['B', B],
+    ])}`;
+  } else {
+    const beta = Math.min(Math.max(g.neigung ?? 0, 0), m.alpha);
+    formel = 'B × T² × (tan α − tan β) / 2';
+    rechnung = `${zr(B)} × ${zr(m.tiefe)}² × (tan ${zg(m.alpha)} − tan ${zg(beta)}) / 2`;
+    parameter = `Hauptdach α: ${zg(m.alpha)}; Gaubendach β: ${zg(beta)}; ${parameterText([
+      ['T', m.tiefe],
+      ['B', B],
+    ])}`;
+  }
+  return {
+    ...base,
+    art: 'gaube',
+    bezeichnung: t.bezeichnung,
+    parameter,
+    formel,
+    rechnung: minus + rechnung,
+    flaeche: sign * B * m.tiefe,
+    hoehe: m.hVorne + m.giebel,
+    laenge: B,
+    breite: m.tiefe,
+    neigung: g.typ === 'sattel' ? g.dachneigung : g.typ === 'flach' ? 0 : g.neigung,
+    volumen: sign * t.anzahl * t.flaeche * t.hoehe * t.faktor,
+  };
+}
+
+/** Dachkörper als Ganzes mit geschlossener Formel bzw. Grundfläche × mittlere Höhe */
+function dachKoerper(s: OutlineShape, dachTeile: Teil[], base: KoerperBasis, sign: number): BriKoerper {
+  const minus = sign < 0 ? '− ' : '';
+  const V = dachTeile.reduce((a, t) => a + t.anzahl * t.flaeche * t.hoehe * t.faktor, 0);
+  const A = polygonArea(s.points);
+  const d = s.dach!;
+  const fr = d.typ === 'modell' ? null : roofFrame(d, s.points);
+  const L = fr ? fr.u1 - fr.u0 : 0;
+  const B = fr ? fr.v1 - fr.v0 : 0;
+  const df = fr && isFrameRect(fr, A) ? dachFormel(d, L, B) : null;
+  const common = {
+    ...base,
+    art: 'dach' as const,
+    bezeichnung: d.typ === 'modell' ? 'Körper bis Dachhaut (IFC-Modell)' : (DACH_TYPEN.find((x) => x.id === d.typ)?.label ?? 'Dach'),
+    neigung: d.typ === 'modell' ? undefined : d.neigung,
+    volumen: sign * V,
+  };
+  if (df) {
+    return {
+      ...common,
+      parameter: parameterText(df.parameter),
+      formel: df.formel,
+      rechnung: minus + einsetzen(df.formel, df.werte),
+      flaeche: sign * L * B,
+      hoehe: df.hoehe,
+      laenge: L,
+      breite: B,
+    };
+  }
+  // unregelmäßiger Grundriss oder Dach aus dem Modell: Grundfläche × mittlere Höhe
+  const hm = A > 1e-12 ? V / A : 0;
+  return {
+    ...common,
+    parameter: parameterText([
+      ['A', A, 'm²'],
+      ['hm (mittlere Höhe)', hm],
+    ]),
+    formel: 'A × hm',
+    rechnung: minus + einsetzen('A × hm', { A, hm }),
+    flaeche: sign * A,
+    hoehe: hm,
+  };
 }

@@ -133,6 +133,41 @@ describe('Excel-Export mit Vorlage', () => {
     expect((ws.getCell('F24').value as { result: number }).result).toBeCloseTo(res.total.bri.total, 1);
   });
 
+  it('BRI: Dachgeschoss mit Schleppgaube wie in der Büro-Vorlage', async () => {
+    const p = createProject('Sanierung EFH Sander');
+    const dg = p.storeys[0];
+    dg.name = 'DG';
+    const o = createOutline(rectPoints({ x: 0, y: 0 }, { x: 12, y: 10.75 }));
+    o.dach = { ...defaultDach('walm', 0), neigung: 45, neigungWalm: 45, gauben: [{ typ: 'schlepp', seite: 0, abstand: 3.9, breite: 4.2, vorne: 0.5, tiefe: 4.115, neigung: 25 }] };
+    dg.shapes.push(o);
+    const res = computeProject(p);
+    const ws = (await load(await exportWithTemplate(await buildSampleTemplate(), p, res))).getWorksheet('BRI')!;
+    const rows: unknown[][] = [];
+    ws.eachRow((row) => rows.push((row.values as unknown[]).slice(1)));
+    const text = rows.map((r) => r.filter((v) => v !== null && v !== undefined && typeof v !== 'object').join(' | '));
+    expect(text).toContain('Schleppgaube');
+    expect(text).toContain('Hauptdach α: 45°; Gaubendach β: 25°; T: 4,115 m; B: 4,20 m');
+    expect(text).toContain('B × T² × (tan α − tan β) / 2 =');
+    const r = rows.find((x) => x[3] === '4,2 × 4,115² × (tan 45° − tan 25°) / 2 =')!;
+    expect(r[4]).toBeCloseTo(18.98, 2);
+    const sum = rows.find((x) => x[0] === 'Brutto-Rauminhalt gesamt')!;
+    expect((sum[5] as { result: number }).result).toBeCloseTo(res.total.bri.total, 1);
+  });
+
+  it('ersetzt Platzhalter in Kopf- und Fußzeile', async () => {
+    const tpl = new ExcelJS.Workbook();
+    const ws0 = tpl.addWorksheet('Kopf');
+    ws0.getCell('A1').value = '{{projekt.name}}';
+    ws0.headerFooter.oddHeader = '&L&"Arial,Fett"{{projekt.name}}&RProjekt {{projekt.code}}';
+    ws0.headerFooter.oddFooter = '&LStand {{datum}} · BRI {{summe.bri}} m³ · {{gibtsnicht}}&RSeite &P/&N';
+    const p = project();
+    p.meta.projektcode = 'A&B 42';
+    const wb = await load(await exportWithTemplate(new Uint8Array(await tpl.xlsx.writeBuffer()), p, computeProject(p), new Date(2026, 8, 28)));
+    const hf = wb.getWorksheet('Kopf')!.headerFooter;
+    expect(hf.oddHeader).toBe('&L&"Arial,Fett"Sanierung EFH Sander&RProjekt A&&B 42');
+    expect(hf.oddFooter).toMatch(/^&LStand 28\.9\.2026 · BRI [\d.,]+ m³ · \{\{gibtsnicht\}\}&RSeite &P\/&N$/);
+  });
+
   it('erzeugt das Standardlayout inkl. BRI-Rechenweg', async () => {
     const p = project();
     const wb = await load(await exportDefault(p, computeProject(p)));

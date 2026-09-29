@@ -1,11 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { modellRoofParams } from '../core/calc';
 import { fmt2 } from '../core/format';
 import { rectPoints } from '../core/geometry';
 import type { OutlineShape, Project, Storey } from '../core/model';
+import type { Gaube, GaubenTyp } from '../core/gaube';
+import { defaultGaube, GAUBEN_TYPEN, gaubenMasse, gaubenMoeglich, gaubenVolumen } from '../core/gaube';
 import type { Dach, DachTyp, Point3 } from '../core/roof';
-import { DACH_TYPEN, defaultDach, roofStats, solidFaces } from '../core/roof';
+import { DACH_TYPEN, defaultDach, roofFrame, roofStats, solidFaces } from '../core/roof';
 import { meshRoofStats } from '../core/roofMesh';
+import { dachAusModell } from '../core/roofFit';
 import { Field, NumberField } from './fields';
 
 /** Dach / oberer Abschluss eines BGF-Umrisses. */
@@ -31,17 +34,46 @@ export function RoofEditor({
       return { volumen: m.volumen, firsthoehe: m.firsthoehe, info: `Dachhaut über ${Math.round(m.abdeckung * 100)} % der Fläche` };
     }
     const s = roofStats(d, shape.points);
-    return { volumen: s.volumen, firsthoehe: s.firsthoehe, info: `Firstrichtung ${fmt2(s.frame.angle)}°` };
+    const g = gaubenVolumen(d);
+    return { volumen: s.volumen + g, firsthoehe: s.firsthoehe, info: `Firstrichtung ${fmt2(s.frame.angle)}°${g ? ` · davon Gauben ${fmt2(g)} m³` : ''}` };
   }, [d, shape.points, project, storey, h]);
 
   const set = (patch: Partial<Dach>) => d && onChange({ ...d, ...patch });
+  const [erkennung, setErkennung] = useState<string | null>(null);
+
+  /** Dachform und Gauben aus dem Modell ableiten; Gaubenwände aus der mitgespeicherten IFC-Datei */
+  const erkennen = async () => {
+    if (!project.dachModell) return;
+    const r = modellRoofParams(project, storey, shape);
+    if (r.cap !== Infinity) {
+      setErkennung(storey.geschosshoeheBegrenzt ? 'Nicht möglich, solange der BRI dieses Geschosses auf die Geschosshöhe begrenzt ist.' : 'Nur für den obersten Abschluss möglich – darüber liegt ein Geschoss mit BGF.');
+      return;
+    }
+    setErkennung('Dach wird analysiert …');
+    let waende: ArrayLike<number>[] = [];
+    const ifc = project.dateien?.filter((x) => x.art === 'ifc').pop();
+    if (ifc) {
+      try {
+        const { loadIfc } = await import('../platform/ifc');
+        const x = await loadIfc(ifc.daten.slice());
+        waende = x.elements.filter((e) => e.type.startsWith('IFCWALL') || e.type === 'IFCWINDOW' || /gaube|dormer/i.test(e.name)).map((e) => e.tris);
+      } catch {
+        // ohne Wände: Gaubenmaße aus dem Gaubendach
+      }
+    }
+    const e = dachAusModell(project.dachModell, shape.points, r.floorZ, waende);
+    if (e.dach) {
+      onChange(e.dach);
+      setErkennung(`${e.text} übernommen (Abweichung zum Modell ${(e.abweichung * 100).toFixed(1).replace('.', ',')} %).`);
+    } else setErkennung(`Nicht übernommen: ${e.grund}.`);
+  };
   const choose = (typ: DachTyp | 'kein') => {
     if (typ === 'kein') onChange(undefined);
     else if (typ === 'modell') onChange({ typ: 'modell', traufhoehe: h, neigung: 0, maxHoehe: d?.maxHoehe });
     else {
       // bewährte Werte übernehmen, wenn nur die Form gewechselt wird
       const base = defaultDach(typ, d?.traufhoehe ?? h);
-      onChange({ ...base, firstrichtung: d?.firstrichtung });
+      onChange({ ...base, firstrichtung: d?.firstrichtung, gauben: d?.gauben });
     }
   };
 
@@ -137,6 +169,7 @@ export function RoofEditor({
               )}
             </div>
           )}
+          {gaubenMoeglich(d) && <GaubenEditor dach={d} points={shape.points} onChange={(gauben) => set({ gauben: gauben.length ? gauben : undefined })} />}
         </>
       )}
       {d?.typ === 'modell' && (
@@ -147,6 +180,14 @@ export function RoofEditor({
           <NumberField value={d.maxHoehe} allowEmpty min={0} onChange={(v) => onChange({ ...d, maxHoehe: v })} />
         </Field>
       )}
+      {d?.typ === 'modell' && project.dachModell && (
+        <div className="button-row">
+          <button className="small" onClick={erkennen} title="Dachform, Neigung, Traufhöhe und Gauben aus dem Modell ableiten – für den BRI mit Formeln">
+            Dachform und Gauben erkennen
+          </button>
+        </div>
+      )}
+      {erkennung && <p className="muted small-text">{erkennung}</p>}
       {stats && (
         <div className="metric-row">
           <div className="metric">
@@ -160,6 +201,106 @@ export function RoofEditor({
         </div>
       )}
       {stats && <p className="muted small-text">{stats.info}</p>}
+    </div>
+  );
+}
+
+/* ---------- Gauben ---------- */
+
+function GaubenEditor({ dach, points, onChange }: { dach: Dach; points: OutlineShape['points']; onChange: (g: Gaube[]) => void }) {
+  const gauben = dach.gauben ?? [];
+  const fr = roofFrame(dach, points);
+  const L = fr.u1 - fr.u0;
+  const B = fr.v1 - fr.v0;
+  // Gauben enden spätestens am First (Pultdach: an der hohen Traufe)
+  const maxTiefe = dach.typ === 'pult' ? B : B / 2;
+  const upd = (i: number, patch: Partial<Gaube>) => onChange(gauben.map((g, k) => (k === i ? { ...g, ...patch } : g)));
+  const zweiSeiten = dach.typ !== 'pult';
+
+  return (
+    <div className="gauben">
+      <h3>Gauben</h3>
+      {!gauben.length && <p className="muted small-text">Rauminhalt über der Dachfläche, z. B. Schleppgaube B × T² × (tan α − tan β) / 2.</p>}
+      {gauben.map((g, i) => {
+        const m = gaubenMasse(g, dach);
+        const warn: string[] = [];
+        if (g.vorne + m.tiefe > maxTiefe + 1e-6) warn.push('reicht über den First hinaus');
+        if (g.abstand < -1e-6 || g.abstand + g.breite > L + 1e-6) warn.push('ragt seitlich über das Dach hinaus');
+        if (g.typ === 'schlepp' && (g.neigung ?? 0) >= m.alpha) warn.push('Gaubendach muss flacher sein als das Hauptdach');
+        return (
+          <div key={i} className="gaube">
+            <div className="field-row">
+              <Field label="Art">
+                <select value={g.typ} onChange={(e) => upd(i, { typ: e.target.value as GaubenTyp })}>
+                  {GAUBEN_TYPEN.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {zweiSeiten && (
+                <Field label="Dachseite">
+                  <select value={g.seite} onChange={(e) => upd(i, { seite: e.target.value === '1' ? 1 : 0 })}>
+                    <option value={0}>Traufseite 1</option>
+                    <option value={1}>Traufseite 2</option>
+                  </select>
+                </Field>
+              )}
+            </div>
+            <div className="field-row">
+              <Field label="Breite B [m]">
+                <NumberField value={g.breite} min={0.1} digits={3} onChange={(v) => v !== undefined && upd(i, { breite: v })} />
+              </Field>
+              <Field label="Abstand vom Rand [m]" hint="in Firstrichtung">
+                <NumberField value={g.abstand} min={0} digits={3} onChange={(v) => v !== undefined && upd(i, { abstand: v })} />
+              </Field>
+              <Field label="Abstand Traufe [m]" hint="waagerecht bis Vorderwand">
+                <NumberField value={g.vorne} min={0} digits={3} onChange={(v) => v !== undefined && upd(i, { vorne: v })} />
+              </Field>
+            </div>
+            {g.typ === 'sattel' ? (
+              <div className="field-row">
+                <Field label="Wandhöhe h [m]" hint="Vorderwand über Dachfläche">
+                  <NumberField value={g.wandhoehe ?? 1.2} min={0} digits={3} onChange={(v) => v !== undefined && upd(i, { wandhoehe: v })} />
+                </Field>
+                <Field label="Neigung γ [°]">
+                  <NumberField value={g.dachneigung ?? 45} min={0} max={89} digits={1} onChange={(v) => v !== undefined && upd(i, { dachneigung: v })} />
+                </Field>
+              </div>
+            ) : (
+              <div className="field-row">
+                <Field label="Tiefe T [m]" hint="waagerecht bis Anschluss Hauptdach">
+                  <NumberField value={g.tiefe ?? 2} min={0} digits={3} onChange={(v) => v !== undefined && upd(i, { tiefe: v })} />
+                </Field>
+                {g.typ === 'schlepp' && (
+                  <Field label="Neigung β [°]">
+                    <NumberField value={g.neigung ?? 15} min={0} max={89} digits={1} onChange={(v) => v !== undefined && upd(i, { neigung: v })} />
+                  </Field>
+                )}
+              </div>
+            )}
+            <div className="gaube-foot">
+              <span className="small-text">
+                {g.name ? `${g.name} · ` : ''}
+                {fmt2(m.volumen)} m³ · Vorderwand {fmt2(m.hVorne + m.giebel)} m über Dachfläche
+              </span>
+              <span className="button-row">
+                <button className="small" onClick={() => onChange([...gauben.slice(0, i + 1), { ...g, name: undefined }, ...gauben.slice(i + 1)])} title="Gleiche Gaube noch einmal">
+                  duplizieren
+                </button>
+                <button className="small danger" onClick={() => onChange(gauben.filter((_, k) => k !== i))}>
+                  entfernen
+                </button>
+              </span>
+            </div>
+            {warn.length > 0 && <p className="warning small-text">Gaube {warn.join(', ')}.</p>}
+          </div>
+        );
+      })}
+      <button className="small" onClick={() => onChange([...gauben, defaultGaube(dach, fr)])}>
+        + Gaube
+      </button>
     </div>
   );
 }

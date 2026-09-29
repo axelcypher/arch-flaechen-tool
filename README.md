@@ -21,6 +21,10 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
   Raumhöhen), BGF-Umrisse aus den Bauteilen und Dachhaut für den BRI – siehe [docs/archicad-ifc.md](docs/archicad-ifc.md)
 - **Dachformen** je BGF-Umriss für den BRI: Flach-, Pult-, Sattel-, Walm-, Krüppelwalm-, Zelt-, Mansard-,
   Mansardwalm-, Tonnen- und Sheddach mit Traufhöhe, Neigungen und Firstrichtung (exakte Volumenberechnung)
+- **Gauben** (Schlepp-, Flachdach-, Satteldachgaube) mit den üblichen Formeln, z. B.
+  B × T² × (tan α − tan β) / 2 – in BRI, Rechenweg, Excel-Vorlage und 3D-Ansicht
+- **Dachform- und Gaubenerkennung aus IFC**: Dachform, Neigung, Traufhöhe und Gauben werden aus der
+  Dachhaut abgeleitet und nur übernommen, wenn sie den Rauminhalt des Modells treffen
 - **3D-Ansicht** der Rauminhalte (Geschosse auseinanderziehbar, Vergleich mit dem IFC-Modell)
 - Zeichnen von **Polygonen** und **Rechtecken** als BGF-Umriss oder Raum
 - **Raum erkennen per Klick** (Werkzeug „Erkennen“): Klick in einen umschlossenen Bereich eines DXF-/PDF-/Bildplans

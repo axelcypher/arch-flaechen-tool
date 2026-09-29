@@ -8,6 +8,7 @@ import { createOutline, createProject, createRoom, createStorey } from './model'
 import { modellRoofParams } from './calc';
 import type { DachModell } from './roofMesh';
 import { meshRoofStats } from './roofMesh';
+import { dachAusModell } from './roofFit';
 import { woflArt } from './norms';
 import { SegmentGrid } from './spatial';
 
@@ -24,6 +25,8 @@ export interface IfcImportOptions {
   wohnflaeche: boolean;
   /** Geschossschnitt als Vektorplan hinterlegen (Schnitthöhe über Fußboden in m, 0/undefiniert = aus) */
   planSchnitthoehe?: number;
+  /** Dachform und Gauben aus dem Modell ableiten (für BRI-Formeln); sonst Dach als Höhenfeld */
+  dachform?: boolean;
 }
 
 export interface IfcImportResult {
@@ -44,6 +47,8 @@ const OUTLINE_TYPES = new Set([
 ]);
 /** nur als Teil einer Vorhangfassade (sonst z. B. Sparren im Dachüberstand) */
 const CURTAIN_PARTS = new Set(['IFCPLATE', 'IFCMEMBER']);
+/** Bauteile, die nach ihrem Namen eine Gaube sind */
+const GAUBE_NAME = /gaube|dormer/i;
 const isOutlinePart = (e: IfcMeshPart) => OUTLINE_TYPES.has(e.type) || (CURTAIN_PARTS.has(e.type) && e.parentType === 'IFCCURTAINWALL');
 
 export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResult {
@@ -155,8 +160,14 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
   // Dach aus Modell
   let dachModell: DachModell | undefined;
   if (o.roof) {
-    const roofParts = x.elements.filter((e) => e.type === 'IFCROOF' || (e.type === 'IFCSLAB' && e.predefinedType === 'ROOF') || (e.type === 'IFCCOVERING' && e.predefinedType === 'ROOFING'));
+    // Gauben als Bibliotheksobjekt (z. B. Archicad → IfcBuildingElementProxy „Gaube“) gehören mit zur Dachhaut
+    const istGaube = (e: IfcMeshPart) => GAUBE_NAME.test(e.name) || GAUBE_NAME.test(e.predefinedType);
+    const roofParts = x.elements.filter(
+      (e) => e.type === 'IFCROOF' || (e.type === 'IFCSLAB' && e.predefinedType === 'ROOF') || (e.type === 'IFCCOVERING' && e.predefinedType === 'ROOFING') || istGaube(e),
+    );
     const tris = upwardTriangles(roofParts);
+    // Wände und Fenster zum Vermessen der Gauben
+    const waende = o.dachform ? x.elements.filter((e) => e.type.startsWith('IFCWALL') || e.type === 'IFCWINDOW' || istGaube(e)).map((e) => e.tris) : [];
     if (tris.length) {
       dachModell = { name: 'IFC-Dach', triangles: tris };
       const tmp = createProject();
@@ -171,6 +182,14 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
           const full = polygonArea(s.points) * st.hoehe;
           // nur dort, wo das Dach den Körper tatsächlich begrenzt oder darüber kein Geschoss mit BGF liegt
           if (m.abdeckung > 0.02 && Math.abs(m.volumen - full) > 0.01) s.dach = probe.dach;
+          // oberster Abschluss: Dachform und Gauben erkennen, damit der BRI mit Formeln ausgewiesen werden kann
+          if (o.dachform && s.dach?.typ === 'modell' && r.cap === Infinity) {
+            const e = dachAusModell(dachModell!, s.points, r.floorZ, waende);
+            if (e.dach) {
+              s.dach = e.dach;
+              report.push(`${st.name}: ${e.text} erkannt (Abweichung zum Modell ${(e.abweichung * 100).toFixed(1).replace('.', ',')} %).`);
+            } else report.push(`${st.name}: Dachform nicht übernommen (${e.grund}) – BRI bis zur Dachhaut aus dem Modell.`);
+          }
         }
       });
       // Geschosse ohne BGF (z. B. Spitzboden/Dachspitze als eigenes Geschoss)

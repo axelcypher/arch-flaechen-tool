@@ -25,7 +25,7 @@ const NUM = '#,##0.00';
 
 /* ---------- Vorlage füllen ---------- */
 
-export async function exportWithTemplate(template: Uint8Array, project: Project, result: ProjectResult): Promise<Uint8Array> {
+export async function exportWithTemplate(template: Uint8Array, project: Project, result: ProjectResult, date = new Date()): Promise<Uint8Array> {
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
   try {
@@ -33,7 +33,7 @@ export async function exportWithTemplate(template: Uint8Array, project: Project,
   } catch (e) {
     throw new Error(`Die Vorlage konnte nicht gelesen werden (nur .xlsx wird unterstützt): ${e instanceof Error ? e.message : String(e)}`);
   }
-  const ctx = buildExportContext(project, result);
+  const ctx = buildExportContext(project, result, date);
   wb.eachSheet((ws) => fillHeaderFooter(ws, ctx));
   wb.eachSheet((ws) => fillSheet(ws, ctx));
   wb.eachSheet((ws) => writeFormulaResults(ws));

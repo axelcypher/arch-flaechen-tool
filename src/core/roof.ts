@@ -1,3 +1,5 @@
+import type { Gaube } from './gaube';
+import { gaubenFaces } from './gaube';
 import type { Point } from './geometry';
 import { distance } from './geometry';
 
@@ -52,6 +54,8 @@ export interface Dach {
   shedHoehe?: number;
   /** Dach aus Modell (IFC): maximale Höhe über Fußboden (z. B. Geschosshöhe, wenn darüber ein Geschoss folgt) */
   maxHoehe?: number;
+  /** Dachgauben auf den Traufseiten (siehe gaube.ts); ihr Rauminhalt kommt zum Dach hinzu */
+  gauben?: Gaube[];
 }
 
 export const DACH_TYPEN: { id: DachTyp; label: string; hint: string }[] = [
@@ -461,5 +465,9 @@ export function solidFaces(pts: Point[], dach: Dach | undefined, h: number): Sol
       sides.push([e.a, e.b, f.a, f.b]);
     }
   }
+  // Gauben auf den Dachflächen
+  const g = gaubenFaces(d, roofFrame(d, pts));
+  tops.push(...g.tops);
+  sides.push(...g.sides);
   return { tops, sides, bottom: pts.map((p) => ({ x: p.x, y: p.y, z: 0 })) };
 }

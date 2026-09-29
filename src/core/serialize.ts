@@ -1,6 +1,7 @@
 import type { Background, DateiArt, Nutzungsgruppe, Project, ProjektDatei, RasterBackground, Shape, Storey, VectorBackground, WoflKategorie } from './model';
 import { createProject, newId } from './model';
 import { NUTZUNGSGRUPPEN, WOFL_KATEGORIEN } from './norms';
+import type { Gaube, GaubenTyp } from './gaube';
 import type { Dach, DachTyp } from './roof';
 import { DACH_TYPEN } from './roof';
 
@@ -121,6 +122,25 @@ function normalizeDach(d: unknown): Dach | undefined {
   const out: Dach = { typ: d.typ as DachTyp, traufhoehe: num(d.traufhoehe, 3), neigung: num(d.neigung, 0) };
   for (const k of DACH_NUM_KEYS) if (typeof d[k] === 'number' && Number.isFinite(d[k])) out[k] = d[k] as number;
   if (d.umkehren === true) out.umkehren = true;
+  if (Array.isArray(d.gauben)) {
+    const gauben = d.gauben.filter(isObj).map(normalizeGaube);
+    if (gauben.length) out.gauben = gauben;
+  }
+  return out;
+}
+
+const GAUBEN_NUM_KEYS = ['tiefe', 'neigung', 'wandhoehe', 'dachneigung'] as const;
+
+function normalizeGaube(g: Record<string, unknown>): Gaube {
+  const out: Gaube = {
+    typ: oneOf<GaubenTyp>(g.typ, ['schlepp', 'flach', 'sattel'], 'schlepp'),
+    seite: g.seite === 1 ? 1 : 0,
+    abstand: num(g.abstand, 0),
+    breite: num(g.breite, 1),
+    vorne: num(g.vorne, 0),
+  };
+  for (const k of GAUBEN_NUM_KEYS) if (typeof g[k] === 'number' && Number.isFinite(g[k])) out[k] = g[k] as number;
+  if (typeof g.name === 'string' && g.name) out.name = g.name;
   return out;
 }
 

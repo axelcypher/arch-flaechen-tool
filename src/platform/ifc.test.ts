@@ -54,6 +54,18 @@ describe('IFC-Import (Testhaus, Millimeter)', () => {
     expect(res.storeys[0].bri.total).toBeCloseTo(240, 3);
     expect(res.storeys[1].bri.total).toBeCloseTo(264, 1);
   });
+
+  it('erkennt die Dachform (hier Flachdach) bei gleichem BRI', () => {
+    const r = buildFromIfc(x, { rooms: false, outlines: true, roof: true, wohnflaeche: false, dachform: true });
+    const p = createProject();
+    p.storeys = r.storeys;
+    p.dachModell = r.dachModell;
+    const og = r.storeys[1].shapes.find((s) => s.kind === 'outline')!;
+    expect(og.kind === 'outline' && og.dach).toMatchObject({ typ: 'flach' });
+    expect(og.kind === 'outline' && og.dach?.traufhoehe).toBeCloseTo(3.3, 2);
+    expect(computeProject(p).storeys[1].bri.total).toBeCloseTo(264, 1);
+    expect(r.report.some((z) => z.includes('Flachdach'))).toBe(true);
+  });
 });
 
 describe('Raumhöhen nach WoFlV', () => {
@@ -84,5 +96,11 @@ describe.runIf(!!REAL && fs.existsSync(REAL ?? ''))('IFC-Import (Archicad-Beispi
     const res = computeProject(p);
     expect(res.total.bgf.total).toBeGreaterThan(0);
     expect(res.total.bri.total).toBeGreaterThan(res.total.bgf.total * 2);
+    // Dachform erkannt (FZK-Haus: Satteldach 30°), BRI praktisch unverändert
+    const r2 = buildFromIfc(await extract(REAL!), { rooms: true, outlines: true, roof: true, wohnflaeche: true, dachform: true });
+    const p2 = createProject();
+    p2.storeys = r2.storeys;
+    p2.dachModell = r2.dachModell;
+    expect(Math.abs(computeProject(p2).total.bri.total - res.total.bri.total) / res.total.bri.total).toBeLessThan(0.03);
   });
 });

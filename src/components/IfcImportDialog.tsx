@@ -23,6 +23,7 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
     roof: true,
     wohnflaeche: false,
     planSchnitthoehe: 1,
+    dachform: true,
     replace: true,
   });
 
@@ -132,6 +133,10 @@ export function IfcImportDialog({ onClose }: { onClose: () => void }) {
             <label className="toggle block">
               <input type="checkbox" checked={opts.roof} onChange={(e) => setOpts({ ...opts, roof: e.target.checked })} />
               Dach aus dem Modell für den BRI (Volumen bis zur Dachhaut)
+            </label>
+            <label className="toggle block indent">
+              <input type="checkbox" checked={!!opts.dachform} disabled={!opts.roof} onChange={(e) => setOpts({ ...opts, dachform: e.target.checked })} />
+              Dachform und Gauben erkennen (BRI mit Formeln, z. B. Walmdach + Schleppgaube) – nur wenn sie das Modell genau treffen
             </label>
             <label className="toggle block">
               <input

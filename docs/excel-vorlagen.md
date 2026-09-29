@@ -90,7 +90,9 @@ Bezüge aus *anderen* Blättern auf ein Blatt mit Wiederholungen werden nicht an
 Normalgeschosse und Dachgeschosse werden unterschiedlich gerechnet: im Normalgeschoss
 **Geschosshöhe × BGF**, im Dachgeschoss je Dachkörper mit eigener Formel (Walmdach, Satteldach …).
 Dafür gibt es die Sammlung `koerper` – je BGF-Umriss ein **Grundkörper** (Quader bis Geschoss- bzw.
-Traufhöhe) und bei geneigtem Dach ein **Dachkörper** als Ganzes – sowie die Filter `[normal]` und `[dg]`.
+Traufhöhe), bei geneigtem Dach ein **Dachkörper** als Ganzes und je **Gaube** ein eigener Körper
+(α = Hauptdachneigung, β/γ = Gaubendachneigung, T = waagerechte Tiefe bis zum Anschluss ans Hauptdach,
+h = Wandhöhe über der Dachfläche) – sowie die Filter `[normal]`, `[dg]`, `[dach]`, `[gaube]`.
 
 Ein Geschoss gilt automatisch als Dachgeschoss, sobald einer seiner BGF-Umrisse ein geneigtes Dach trägt.
 In den Geschosseigenschaften lässt sich das unter **Geschossart** festlegen (automatisch / Normalgeschoss /
@@ -106,6 +108,9 @@ Dachgeschoss). Der Filter wirkt auf `geschoss`, `raum`, `bri` und `koerper`.
 | Tonnendach | `L × A` (A = Kreisabschnitt) |
 | unregelmäßiger Grundriss, Mansardwalm, Dach aus IFC | `A × hm` (Grundfläche × mittlere Höhe) |
 | Grundkörper | `L × B × H` bzw. `A × H` |
+| Schleppgaube | `B × T² × (tan α − tan β) / 2` |
+| Flachdachgaube | `B × T² × tan α / 2` |
+| Satteldachgaube | `B × (h² + Hg × (h + Hg / 3)) / (2 × tan α)` (Hg = B/2 × tan γ) |
 
 `koerper.parameter` listet die Maße („H: 5,375 m; B: 10,75 m; L: 12,00 m“), `koerper.rechnung` die Formel
 mit eingesetzten Werten („10,75 × 5,375 × (3 × 12 − 10,75) / 6“, Maße auf mm genau – nachrechenbar),
@@ -128,7 +133,8 @@ Muster-Vorlage):
 | 25 | Brutto-Rauminhalt gesamt | | | | | `=SUMME(F12:F22)` |
 
 Die Zahlenformate `#.##0,00 "m  *"` und `#.##0,00 "m²  ="` erzeugen die Darstellung „2,40 m \*
-48,69 m² =“. Gauben sind im Modell (noch) nicht als eigene Körper erfasst.
+48,69 m² =“. Gauben erscheinen im Dachgeschossblock automatisch nach dem Dach, z. B. „Schleppgaube /
+Hauptdach α: 45°; Gaubendach β: 25°; T: 4,115 m; B: 4,20 m / 4,2 × 4,115² × (tan 45° − tan 25°) / 2 = 18,98 m³“.
 
 ## BRI mit Rechenweg (Teilkörper)
 
@@ -167,7 +173,7 @@ Text (z. B. `12,00 × 9,00 × 3,151 × ½`). Beispiel (Blatt „BRI Teilkörper�
 | `wofl` / `wohnflaeche` | Räume mit Wohnflächenanrechnung (WoFlV-Kategorie ≠ „keine“) |
 | `nebenflaeche` | Räume ohne Wohnflächenanrechnung |
 | `dg` / `normal` | Dachgeschosse bzw. Normalgeschosse (Geschossart) |
-| `dach` / `grundkoerper` | nur `koerper`: Dachkörper bzw. Grundkörper |
+| `dach` / `gaube` / `grundkoerper` | nur `koerper`: Dachkörper, Gauben bzw. Grundkörper |
 | `hnf` / `nnf` | NUF 1–6 bzw. NUF 7 |
 | `nuf` / `tf` / `vf` | Nutzungsfläche, Technikfläche, Verkehrsfläche |
 | `r` / `s` | Raumumschließung Regel- bzw. Sonderfall |

@@ -2,6 +2,7 @@ import type { Point } from './geometry';
 import { distanceToEdges, pointInPolygon, polygonArea } from './geometry';
 import type { Nutzungsgruppe, OutlineShape, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
 import { roomArea, storeyElevations } from './model';
+import { gaubenVolumen } from './gaube';
 import { roofStats } from './roof';
 import { meshRoofStats } from './roofMesh';
 import { nutzungInfo, woflFaktor } from './norms';
@@ -131,7 +132,7 @@ export function outlineVolume(s: OutlineShape, storey: Storey, project: Project)
     const r = modellRoofParams(project, storey, s);
     return meshRoofStats(project.dachModell, s.points, r.floorZ, h, r.cap).volumen;
   }
-  return Math.abs(roofStats(s.dach, s.points).volumen);
+  return Math.abs(roofStats(s.dach, s.points).volumen) + gaubenVolumen(s.dach);
 }
 
 export function computeStorey(storey: Storey, project: Project): StoreyResult {
