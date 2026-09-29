@@ -354,7 +354,25 @@ export function roofStats(d: Dach, pts: Point[]): RoofStats {
   }
   vol *= sign;
   const area = Math.abs(signedArea2(pts)) / 2;
+  // Tonnendach über Rechteck: exakter Kreisabschnitt statt Sehnennäherung
+  if (d.typ === 'tonne' && isFrameRect(frame, area)) {
+    const B = frame.v1 - frame.v0;
+    const L = frame.u1 - frame.u0;
+    vol = area * d.traufhoehe + kreisabschnitt(B, Math.max(1e-6, d.stich ?? 1.5)) * L;
+  }
   return { volumen: vol, dachvolumen: vol - area * d.traufhoehe, firsthoehe: maxH, frame };
+}
+
+/** Ist der Umriss genau das umschließende Rechteck in Firstrichtung? */
+export function isFrameRect(fr: RoofFrame, area: number): boolean {
+  const r = (fr.u1 - fr.u0) * (fr.v1 - fr.v0);
+  return Math.abs(r - area) <= 1e-6 * Math.max(1, r);
+}
+
+/** Fläche eines Kreisabschnitts mit Sehne s und Stich f */
+export function kreisabschnitt(s: number, f: number): number {
+  const R = (s * s) / 4 / (2 * f) + f / 2;
+  return R * R * Math.acos((R - f) / R) - (R - f) * Math.sqrt(Math.max(2 * R * f - f * f, 0));
 }
 
 /** Höhenfunktion h(x, y) über Fußboden; Teilstücke werden einmal vorberechnet. */

@@ -1,5 +1,5 @@
 import type { Point } from './geometry';
-import { pointInPolygon, polygonArea } from './geometry';
+import { distanceToEdges, pointInPolygon, polygonArea } from './geometry';
 import type { Nutzungsgruppe, OutlineShape, Project, Raumumschliessung, Storey, WoflKategorie } from './model';
 import { roomArea, storeyElevations } from './model';
 import { roofStats } from './roof';
@@ -91,6 +91,9 @@ function emptyTotals(): AreaTotals {
  * aber nur dort, wo dieses Geschoss BGF hat (Umriss, abzüglich Abzugsflächen). Sonst bis zur Dachhaut:
  * so wird z. B. die Dachspitze über einem DG erfasst, auch wenn sie als eigenes Geschoss ohne BGF modelliert ist.
  */
+/** größte Abweichung [m], bis zu der Umrisse übereinanderliegender Geschosse als deckungsgleich gelten */
+export const UMRISS_TOLERANZ = 0.02;
+
 export function modellRoofParams(project: Project, storey: Storey, s: OutlineShape): { floorZ: number; cap: number | ((p: Point) => number) } {
   const elev = storeyElevations(project);
   const idx = project.storeys.indexOf(storey);
@@ -107,9 +110,14 @@ export function modellRoofParams(project: Project, storey: Storey, s: OutlineSha
   const minus = upper.filter((x) => x.subtract).map((x) => x.points);
   if (!plus.length) return { floorZ, cap: Infinity };
   const hUp = elev[above] - floorZ;
+  // Umrisse gelten bis UMRISS_TOLERANZ als deckungsgleich: Punkte auf bzw. knapp neben dem Rand des
+  // oberen Umrisses (Wände unterschiedlich gezeichnet/erkannt) sind überdeckt, sonst entstehen am Rand
+  // schmale Streifen „bis zur Dachhaut“.
+  const covered = (p: Point, q: Point[]) => pointInPolygon(p, q) || distanceToEdges(p, q) <= UMRISS_TOLERANZ;
+  const cut = (p: Point, q: Point[]) => pointInPolygon(p, q) && distanceToEdges(p, q) > UMRISS_TOLERANZ;
   return {
     floorZ,
-    cap: (p: Point) => (plus.some((q) => pointInPolygon(p, q)) && !minus.some((q) => pointInPolygon(p, q)) ? hUp : Infinity),
+    cap: (p: Point) => (plus.some((q) => covered(p, q)) && !minus.some((q) => cut(p, q)) ? hUp : Infinity),
   };
 }
 

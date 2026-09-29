@@ -4,7 +4,7 @@ import { fmt2 } from '../core/format';
 import { isSelfIntersecting, perimeter } from '../core/geometry';
 import type { Nutzungsgruppe, Raumumschliessung, Shape, WoflKategorie } from '../core/model';
 import { shapeArea } from '../core/model';
-import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflFaktor } from '../core/norms';
+import { NUTZUNGSGRUPPEN, UMSCHLIESSUNG, WOFL_KATEGORIEN, woflArt, woflFaktor } from '../core/norms';
 import { mapShape, mapStorey, useActiveStorey, useEditor, useSelectedShape } from '../store/store';
 import { BackgroundPanel } from './BackgroundPanel';
 import { RoofEditor } from './RoofEditor';
@@ -237,6 +237,35 @@ function StoreyProperties() {
         </Field>
       </div>
       <p className="muted small-text">Die Geschosshöhe (OK Rohfußboden bis OK Rohfußboden darüber bzw. OK Dachbelag) wird für den BRI verwendet.</p>
+
+      {storey.shapes.some((s) => s.kind === 'room') && (
+        <div className="field">
+          <span className="field-label">Wohnfläche aller Räume dieses Geschosses</span>
+          <div className="button-row">
+            <button
+              title="Nach Raumname: Keller, Technik, Treppen, Garage, Dachboden … keine Wohnfläche; Balkon/Terrasse als Freisitz; übrige Räume anrechnen"
+              onClick={() =>
+                upd((s) => ({
+                  ...s,
+                  shapes: s.shapes.map((sh) => {
+                    if (sh.kind !== 'room') return sh;
+                    const art = woflArt(sh.name, s.name, sh.nutzung);
+                    const wohnung = sh.wofl.wohnung || s.name;
+                    if (art === 'keine') return { ...sh, wofl: { ...sh.wofl, kategorie: 'keine' as const } };
+                    if (art === 'freisitz') return { ...sh, wofl: { ...sh.wofl, kategorie: 'freisitz' as const, wohnung } };
+                    return sh.wofl.kategorie === 'keine' || sh.wofl.kategorie === 'freisitz' ? { ...sh, wofl: { ...sh.wofl, kategorie: 'voll' as const, wohnung } } : { ...sh, wofl: { ...sh.wofl, wohnung } };
+                  }),
+                }))
+              }
+            >
+              automatisch nach Raumname
+            </button>
+            <button onClick={() => upd((s) => ({ ...s, shapes: s.shapes.map((sh) => (sh.kind === 'room' ? { ...sh, wofl: { ...sh.wofl, kategorie: 'keine' as const } } : sh)) }))}>
+              keine
+            </button>
+          </div>
+        </div>
+      )}
 
       <BackgroundPanel storey={storey} />
     </section>

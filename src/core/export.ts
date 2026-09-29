@@ -12,6 +12,7 @@ export function projectToCsv(project: Project, result: ProjectResult): string {
   const n = (v: number, d = 2) => fmtPlain(v, d);
 
   rows.push(['Projekt', project.name]);
+  if (project.meta.projektcode) rows.push(['Projektcode', project.meta.projektcode]);
   if (project.meta.adresse) rows.push(['Adresse', project.meta.adresse]);
   if (project.meta.bearbeiter) rows.push(['Bearbeiter', project.meta.bearbeiter]);
   rows.push([]);
