@@ -24,7 +24,8 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 - **Gauben** (Schlepp-, Flachdach-, Satteldachgaube) mit den üblichen Formeln, z. B.
   B × T² × (tan α − tan β) / 2 – in BRI, Rechenweg, Excel-Vorlage und 3D-Ansicht
 - **Dachform- und Gaubenerkennung aus IFC**: Dachform, Neigung, Traufhöhe und Gauben werden aus der
-  Dachhaut abgeleitet und nur übernommen, wenn sie den Rauminhalt des Modells treffen
+  Dachhaut abgeleitet und nur übernommen, wenn sie den Rauminhalt des Modells treffen – siehe
+  [docs/dach-und-gauben.md](docs/dach-und-gauben.md)
 - **3D-Ansicht** der Rauminhalte (Geschosse auseinanderziehbar, Vergleich mit dem IFC-Modell)
 - Zeichnen von **Polygonen** und **Rechtecken** als BGF-Umriss oder Raum
 - **Raum erkennen per Klick** (Werkzeug „Erkennen“): Klick in einen umschlossenen Bereich eines DXF-/PDF-/Bildplans

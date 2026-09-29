@@ -93,6 +93,7 @@ Dafür gibt es die Sammlung `koerper` – je BGF-Umriss ein **Grundkörper** (Qu
 Traufhöhe), bei geneigtem Dach ein **Dachkörper** als Ganzes und je **Gaube** ein eigener Körper
 (α = Hauptdachneigung, β/γ = Gaubendachneigung, T = waagerechte Tiefe bis zum Anschluss ans Hauptdach,
 h = Wandhöhe über der Dachfläche) – sowie die Filter `[normal]`, `[dg]`, `[dach]`, `[gaube]`.
+Herleitung der Formeln: [Dachform und Gauben](dach-und-gauben.md).
 
 Ein Geschoss gilt automatisch als Dachgeschoss, sobald einer seiner BGF-Umrisse ein geneigtes Dach trägt.
 In den Geschosseigenschaften lässt sich das unter **Geschossart** festlegen (automatisch / Normalgeschoss /

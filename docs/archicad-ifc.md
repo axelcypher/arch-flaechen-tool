@@ -32,27 +32,11 @@ lässt sich je Umriss unter „Höhe begrenzen auf“ eintragen.
 Mit der Option **„Dachform und Gauben erkennen“** (Standard) wird das Dach aus dem Modell für den
 obersten Abschluss eines Umrisses in eine Dachform mit Formeln übersetzt – damit der BRI in der
 Excel-Vorlage wie gewohnt als z. B. *Walmdach B × H × (3 × L − B) / 6* plus *Schleppgaube
-B × T² × (tan α − tan β) / 2* erscheint:
+B × T² × (tan α − tan β) / 2* erscheint. Übernommen wird das nur, wenn Dachform und Gauben den
+Rauminhalt des Modells auf 3 % treffen; sonst bleibt es beim Dach aus dem Modell. Für bereits
+importierte Projekte gibt es im Dach-Editor die Schaltfläche **„Dachform und Gauben erkennen“**.
 
-1. Die Dachhaut über dem Umriss wird in ihre ebenen Flächen zerlegt. Die Hauptdachflächen (die an der
-   Traufe am tiefsten liegen) ergeben Firstrichtung, Dachform (Flach-, Pult-, Sattel-, Walm- oder
-   Krüppelwalmdach), Neigungen und Traufhöhe an der Außenwand.
-2. Was mehr als 8 cm über diese Hauptdachflächen hinausragt, ist eine Gaube. Aus den Flächen ihres
-   Dachs folgt die Art: eine Fläche in Gefällerichtung → **Schleppgaube** (β) bzw. **Flachdachgaube**,
-   zwei Flächen quer dazu → **Satteldachgaube** (γ, Wandhöhe). Breite, seitliche Lage und Abstand von
-   der Traufe werden an den **Gaubenwänden** (Außenkanten) gemessen, damit der Dachüberstand der Gaube
-   nicht mitzählt; ohne Wände aus dem Gaubendach („Maße aus dem Gaubendach“).
-3. Übernommen wird das Ergebnis nur, wenn Dachform + Gauben den Rauminhalt des Modells auf 3 % treffen.
-   Sonst bleibt es beim Dach aus dem Modell (Grundfläche × mittlere Höhe); der Importbericht nennt den Grund.
-
-Nicht erkannt werden u. a. Walm-, Fledermaus- und Tonnengauben, Mansarddächer, unterschiedlich geneigte
-oder versetzte Dachflächen und L-/T-Grundrisse mit mehreren Firsten (Umriss dann teilen). Gauben, die in
-Archicad als Bibliotheksobjekt exportiert werden, gehören zur Dachhaut, wenn ihr Name „Gaube“ oder
-„Dormer“ enthält. Für bereits importierte Projekte gibt es im Dach-Editor die Schaltfläche **„Dachform
-und Gauben erkennen“** (nutzt die im Projekt gespeicherte IFC-Datei für die Gaubenwände). Erkannte
-Werte lassen sich danach im Dach-Editor prüfen und ändern.
-
-Getestet mit dem Archicad-Beispiel AC20-FZK-Haus: Satteldach 30°, Traufe 0,73 m, Abweichung 0,0 %.
+Formeln, Ablauf der Erkennung und Grenzen: [Dachform und Gauben](dach-und-gauben.md).
 
 ## Plan zum Prüfen und Korrigieren
 
