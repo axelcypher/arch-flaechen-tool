@@ -1,7 +1,7 @@
 import type { Unzipped, ZipOptions } from 'fflate';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { Project } from './model';
-import { benutzteDateien } from './model';
+import { benutzteDateien, istVorlage } from './model';
 import { parseProject, parseProjectData, ProjectFormatError } from './serialize';
 
 /**
@@ -75,7 +75,7 @@ export function writeArchive(p: Project, opts: { app?: string; date?: Date } = {
   const dateien = benutzteDateien(p).map((d) => {
     const pfad = `quellen/${d.id}/${safeName(d.name)}`;
     // PDF und Excel sind bereits komprimiert
-    add(pfad, d.daten, d.art, d.name, d.art === 'pdf' || d.art === 'vorlage');
+    add(pfad, d.daten, d.art, d.name, d.art === 'pdf' || istVorlage(d.art));
     const { daten: _, ...rest } = d;
     return { ...rest, pfad };
   });

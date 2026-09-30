@@ -226,3 +226,66 @@ button.link:hover {
 .grz-table tr.selected td {
   background: var(--accent-soft);
 }
+
+.lp-ecke {
+  fill: var(--panel);
+  stroke: var(--sel);
+  cursor: move;
+}
+
+.lp-mitte {
+  fill: var(--sel);
+  fill-opacity: 0.35;
+  stroke: var(--sel);
+  cursor: copy;
+}
+
+/* ---------- Druckbarer Nachweis ---------- */
+
+.grz-report .report-table td {
+  vertical-align: top;
+}
+
+.grz-report .plan-svg {
+  max-height: 120mm;
+}
+
+.grz-report-hinweise {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.grz-report-unterschrift {
+  display: flex;
+  gap: 48px;
+  margin-top: 36px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.grz-report-unterschrift div {
+  flex: 1;
+  max-width: 260px;
+}
+
+.grz-report-unterschrift span {
+  display: block;
+  border-bottom: 1px solid #1f2328;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+  }
+
+  .grz-report h2 {
+    break-after: avoid;
+  }
+
+  .grz-report .plan-figure {
+    break-inside: avoid;
+  }
+}

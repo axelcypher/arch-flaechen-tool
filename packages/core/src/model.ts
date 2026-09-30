@@ -262,7 +262,10 @@ export function flurText(g: Grundstueck): string {
 }
 
 /** Art einer mitgespeicherten Originaldatei */
-export type DateiArt = 'ifc' | 'dxf' | 'pdf' | 'vorlage';
+export type DateiArt = 'ifc' | 'dxf' | 'pdf' | 'vorlage' | 'vorlage-grz';
+
+/** Excel-Vorlagen: „vorlage“ des Flächenrechners, „vorlage-grz“ des GRZ-Nachweises */
+export const istVorlage = (art: DateiArt) => art === 'vorlage' || art === 'vorlage-grz';
 
 /** Originaldatei eines Imports bzw. die Excel-Vorlage des Projekts – im Archiv unter quellen/ abgelegt */
 export interface ProjektDatei {
@@ -372,8 +375,8 @@ export function addDatei(p: Project, name: string, art: DateiArt, daten: Uint8Ar
   const same = p.dateien?.find((d) => d.art === art && d.name === name && gleicheBytes(d.daten, daten));
   if (same) return { project: p, id: same.id };
   const d: ProjektDatei = { id: newId('df'), name, art, datum: new Date().toLocaleDateString('de-DE'), daten };
-  // es gibt nur eine Excel-Vorlage je Projekt
-  const rest = (p.dateien ?? []).filter((x) => art !== 'vorlage' || x.art !== 'vorlage');
+  // es gibt nur eine Excel-Vorlage je Projekt und App
+  const rest = (p.dateien ?? []).filter((x) => !istVorlage(art) || x.art !== art);
   return { project: { ...p, dateien: [...rest, d] }, id: d.id };
 }
 
@@ -383,10 +386,10 @@ function gleicheBytes(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-/** Nur noch benötigte Originaldateien: PDF/DXF, auf die ein Plan verweist, alle IFC-Modelle und die Vorlage */
+/** Nur noch benötigte Originaldateien: PDF/DXF, auf die ein Plan verweist, alle IFC-Modelle und die Vorlagen */
 export function benutzteDateien(p: Project): ProjektDatei[] {
   const refs = new Set(p.storeys.map((s) => s.background?.quelle).filter(Boolean));
-  return (p.dateien ?? []).filter((d) => d.art === 'ifc' || d.art === 'vorlage' || refs.has(d.id));
+  return (p.dateien ?? []).filter((d) => d.art === 'ifc' || istVorlage(d.art) || refs.has(d.id));
 }
 
 /** Fußbodenhöhen aller Geschosse (explizit oder als Summe der Geschosshöhen, unterstes Geschoss = 0) */

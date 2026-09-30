@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Gemeinsamer Unterbau: Geometrie, Projektformat (.oap/.akhp), IFC-Import, Dachformen, Protokoll, Farbschema, Titelleiste und Grund-Styles",
+  "description": "Gemeinsamer Unterbau: Geometrie, Projektformat (.oap/.akhp), IFC-Import, Dachformen, Excel-Vorlagen, Protokoll, Farbschema, Titelleiste und Grund-Styles",
   "scripts": {
     "typecheck": "tsc -p ."
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.0",
     "@tauri-apps/plugin-log": "^2.10.0",
+    "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

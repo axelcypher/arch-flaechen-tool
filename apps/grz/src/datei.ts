@@ -4,6 +4,7 @@ import type { Project } from '@core/model';
 import { addDatei, createProject } from '@core/model';
 import { pickFile, saveBinaryFile } from '@core/platform/files';
 import { logger } from '@core/platform/log';
+import { vorlage } from './vorlage';
 
 const log = logger('datei');
 
@@ -50,7 +51,7 @@ export async function speichern(p: Project, datei: string | null): Promise<strin
   const name = datei && /\.(oap|akhp)$/i.test(datei) ? datei : `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`;
   const ok = await saveBinaryFile({
     defaultName: name,
-    data: writeArchive(p, { app: `GRZ-Nachweis ${__APP_VERSION__}` }),
+    data: writeArchive(vorlage.mit(p), { app: `GRZ-Nachweis ${__APP_VERSION__}` }),
     filterName: 'Projekt',
     extension: ARCHIV_ENDUNGEN[0],
     moreExtensions: ARCHIV_ENDUNGEN.slice(1),

@@ -1,9 +1,11 @@
 import type { AreaTotals, ProjectResult } from '@core/calc';
 import { polygonArea } from '@core/geometry';
 import type { Project } from '@core/model';
-import { anschriftEinzeilig, flurText, istDachgeschoss, plzOrt } from '@core/model';
+import { istDachgeschoss } from '@core/model';
+import { PROJEKT_DOCS, projektWerte } from '@core/excel/projekt';
 import { NUF_IDS, NUTZUNGSGRUPPEN, nutzungInfo, WOFL_KATEGORIEN } from '@core/norms';
 import { briKoerper, briRechenweg } from '@core/rechenweg';
+import type { ExportContext, PlaceholderDocs, Row, Value } from '@core/excel/context';
 
 /**
  * Datengrundlage für Excel-Export und Vorlagen (Syntax siehe docs/excel-vorlagen.md).
@@ -17,19 +19,14 @@ import { briKoerper, briRechenweg } from '@core/rechenweg';
  *   {{geschoss.name|einmal}}      nur in der ersten Zeile der jeweiligen Wiederholung
  */
 
-export type Value = string | number;
-/** Datensatz; Schlüssel mit „_“ sind intern (Zuordnung in Blöcken) */
-export type Row = Record<string, Value>;
+export type { ExportContext, Row, Value } from '@core/excel/context';
+export { hasPlaceholder, repeatCollection, resolveText, shiftFormulaForInsert, shiftRelativeRows } from '@core/excel/context';
 
 export const COLLECTIONS = ['geschoss', 'raum', 'wohnung', 'nutzung', 'bri', 'koerper'] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
-export interface ExportContext {
-  scalars: Record<string, Value>;
-  collections: Record<Collection, Row[]>;
-  /** zum Nachschlagen einzelner Geschosse/Wohnungen per Name */
-  byName: { geschoss: Map<string, Row>; wohnung: Map<string, Row> };
-}
+/** Kontext des Flächenrechners: alle Sammlungen sind immer vorhanden */
+export type FlaechenContext = ExportContext & { collections: Record<Collection, Row[]> };
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -56,40 +53,8 @@ function totalsRow(t: AreaTotals): Row {
   return row;
 }
 
-/** alle Kontakte einer Art, mit Komma getrennt */
-function kontakte(project: Project, art: 'email' | 'telefon'): string {
-  return project.meta.bauherr.kontakte
-    .filter((k) => k.art === art && k.wert.trim())
-    .map((k) => k.wert.trim())
-    .join(', ');
-}
-
-export function buildExportContext(project: Project, result: ProjectResult, date = new Date()): ExportContext {
-  const scalars: Record<string, Value> = {
-    'projekt.name': project.name,
-    'projekt.code': project.meta.projektcode,
-    'projekt.projektcode': project.meta.projektcode,
-    'projekt.adresse': anschriftEinzeilig(project.meta.adresse),
-    'projekt.strasse': project.meta.adresse.strasse,
-    'projekt.plz': project.meta.adresse.plz,
-    'projekt.ort': project.meta.adresse.ort,
-    'projekt.plz_ort': plzOrt(project.meta.adresse),
-    'projekt.bearbeiter': project.meta.bearbeiter,
-    'grundstueck.gemarkung': project.meta.grundstueck.gemarkung,
-    'grundstueck.flur': project.meta.grundstueck.flur,
-    'grundstueck.flurstueck': project.meta.grundstueck.flurstueck,
-    'grundstueck.flurtext': flurText(project.meta.grundstueck),
-    'grundstueck.flaeche': project.meta.grundstueck.flaeche ?? '',
-    'bauherr.name': project.meta.bauherr.name,
-    'bauherr.adresse': anschriftEinzeilig(project.meta.bauherr.adresse),
-    'bauherr.strasse': project.meta.bauherr.adresse.strasse,
-    'bauherr.plz': project.meta.bauherr.adresse.plz,
-    'bauherr.ort': project.meta.bauherr.adresse.ort,
-    'bauherr.plz_ort': plzOrt(project.meta.bauherr.adresse),
-    'bauherr.email': kontakte(project, 'email'),
-    'bauherr.telefon': kontakte(project, 'telefon'),
-    datum: date.toLocaleDateString('de-DE'),
-  };
+export function buildExportContext(project: Project, result: ProjectResult, date = new Date()): FlaechenContext {
+  const scalars: Record<string, Value> = projektWerte(project, date);
 
   const shapesById = new Map(project.storeys.flatMap((st) => st.shapes.map((sh) => [sh.id, sh] as const)));
   // Geschossart: „ja“ bei Dachgeschossen – für Filter [dg] / [normal] in allen Sammlungen
@@ -204,11 +169,13 @@ export function buildExportContext(project: Project, result: ProjectResult, date
       geschoss: new Map(geschoss.map((g) => [String(g.name), g])),
       wohnung: new Map(wohnung.map((w) => [String(w.name), w])),
     },
+    filters: NAMED_FILTERS,
+    belongsTo: zugehoerig,
   };
 }
 
 /** Beschreibung aller Platzhalter – Grundlage für Hilfe-Tabelle und Musterdatei. */
-export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
+export const PLACEHOLDER_DOCS: PlaceholderDocs = [
   {
     group: 'Blöcke, Filter, Modifikatoren',
     keys: [
@@ -222,23 +189,7 @@ export const PLACEHOLDER_DOCS: { group: string; keys: [string, string][] }[] = [
       ['…|einmal', 'Wert nur in der ersten Zeile der Wiederholung, z. B. geschoss.name|einmal'],
     ],
   },
-  {
-    group: 'projekt / grundstueck / bauherr / datum',
-    keys: [
-      ['projekt.name', 'Projektbezeichnung'],
-      ['projekt.code', 'Projektcode (auch projekt.projektcode)'],
-      ['projekt.adresse', 'Adresse in einer Zeile: „Straße Nr., PLZ Ort“'],
-      ['projekt.strasse, projekt.plz, projekt.ort, projekt.plz_ort', 'Adresse in Teilen'],
-      ['projekt.bearbeiter', 'Bearbeiter'],
-      ['grundstueck.gemarkung, grundstueck.flur, grundstueck.flurstueck', 'Grundstücksdaten'],
-      ['grundstueck.flurtext', '„Gemarkung …, Flur …, Flurstück …“'],
-      ['grundstueck.flaeche', 'Grundstücksfläche [m²]'],
-      ['bauherr.name', 'Name des Bauherrn'],
-      ['bauherr.adresse, bauherr.strasse, bauherr.plz, bauherr.ort, bauherr.plz_ort', 'Adresse des Bauherrn'],
-      ['bauherr.email, bauherr.telefon', 'alle E-Mail-Adressen bzw. Telefonnummern, mit Komma getrennt'],
-      ['datum', 'Datum des Exports'],
-    ],
-  },
+  PROJEKT_DOCS,
   {
     group: 'Kennwerte (summe.*, geschoss.*, geschoss:NAME.*)',
     keys: [
@@ -358,131 +309,18 @@ const NAMED_FILTERS: Record<string, (r: Row) => boolean> = {
   'grundkörper': (r) => r.art === 'Grundkörper',
 };
 
-export function parseFilters(spec: string | undefined): ((r: Row) => boolean)[] {
-  if (!spec) return [];
-  return spec
-    .split(',')
-    .map((f) => f.trim())
-    .filter(Boolean)
-    .map((f) => {
-      const neg = f.startsWith('!');
-      const name = neg ? f.slice(1).trim() : f;
-      let fn: (r: Row) => boolean;
-      const eq = /^([a-z0-9_]+)\s*(!?=)\s*(.*)$/i.exec(name);
-      if (eq) {
-        const [, k, op, v] = eq;
-        const want = v.trim().toLowerCase();
-        fn = (r) => (String(r[k] ?? '').trim().toLowerCase() === want) === (op === '=');
-      } else fn = NAMED_FILTERS[name.toLowerCase()] ?? (() => true);
-      return neg ? (r: Row) => !fn(r) : fn;
-    });
-}
-
 /** Wie hängen Sammlungen in Blöcken zusammen? (Kind-Datensatz passt zum gebundenen Eltern-Datensatz) */
-export function belongsTo(child: Collection, row: Row, parent: Collection, p: Row, ctx: ExportContext): boolean {
-  if (child === parent) return row === p;
+function zugehoerig(child: string, row: Row, parent: string, p: Row, ctx: ExportContext): boolean {
+  const raeume = ctx.collections.raum ?? [];
   if (parent === 'geschoss') {
     if (child === 'raum' || child === 'bri' || child === 'koerper') return row._geschossId === p._id;
-    if (child === 'wohnung') return ctx.collections.raum.some((r) => r._geschossId === p._id && r.wohnung === row.name);
+    if (child === 'wohnung') return raeume.some((r) => r._geschossId === p._id && r.wohnung === row.name);
   }
   if (parent === 'wohnung') {
     if (child === 'raum') return row.wohnung === p.name;
-    if (child === 'geschoss') return ctx.collections.raum.some((r) => r._geschossId === row._id && r.wohnung === p.name);
+    if (child === 'geschoss') return raeume.some((r) => r._geschossId === row._id && r.wohnung === p.name);
   }
   if (parent === 'nutzung' && child === 'raum') return row.nutzung === p.gruppe;
   if ((parent === 'raum' || parent === 'bri' || parent === 'koerper') && child === 'geschoss') return row._id === p._geschossId;
   return true;
-}
-
-const PH_SOURCE = /\{\{\s*([^{}]+?)\s*\}\}/.source;
-/** immer neue RegExp-Instanz: globale RegExps tragen lastIndex-Zustand zwischen Aufrufen */
-const ph = () => new RegExp(PH_SOURCE, 'g');
-
-/** Welche Sammlung wiederholt diese Zeile? (erste gefundene) */
-export function repeatCollection(texts: string[]): Collection | null {
-  for (const t of texts) {
-    for (const m of t.matchAll(ph())) {
-      const key = m[1];
-      for (const c of COLLECTIONS) if (key.startsWith(`${c}.`)) return c;
-    }
-  }
-  return null;
-}
-
-function lookup(key: string, ctx: ExportContext, item?: { collection: Collection; row: Row }): Value | undefined {
-  if (key in ctx.scalars) return ctx.scalars[key];
-  if (item && key.startsWith(`${item.collection}.`)) return item.row[key.slice(item.collection.length + 1)];
-  const named = /^(geschoss|wohnung):(.+)\.([a-z0-9_]+)$/.exec(key);
-  if (named) {
-    const row = ctx.byName[named[1] as 'geschoss' | 'wohnung'].get(named[2].trim());
-    return row ? row[named[3]] : '';
-  }
-  return undefined;
-}
-
-/**
- * Ersetzt Platzhalter in einem Zellinhalt. Besteht die Zelle nur aus einem Platzhalter,
- * wird der Rohwert (z. B. Zahl) zurückgegeben, damit Excel damit rechnen kann.
- * Unbekannte Platzhalter bleiben sichtbar stehen, damit Tippfehler auffallen.
- */
-export function resolveText(text: string, ctx: ExportContext, item?: { collection: Collection; row: Row }): Value {
-  const whole = /^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/.exec(text);
-  if (whole) {
-    const v = lookup(whole[1], ctx, item);
-    return v === undefined ? text : v;
-  }
-  return text.replace(ph(), (m, key: string) => {
-    const v = lookup(key, ctx, item);
-    if (v === undefined) return m;
-    return typeof v === 'number' ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) : v;
-  });
-}
-
-export function hasPlaceholder(text: string): boolean {
-  return new RegExp(PH_SOURCE).test(text);
-}
-
-/* ---------- Formelanpassung beim Einfügen von Zeilen ---------- */
-
-// Zellbezug oder Bereich, nicht Teil eines Namens/Funktionsnamens und nicht auf ein anderes Blatt
-const REF = /(^|[^A-Za-z0-9_.!$'"])(\$?)([A-Z]{1,3})(\$?)(\d+)(?::(\$?)([A-Z]{1,3})(\$?)(\d+))?(?![A-Za-z0-9_(])/g;
-
-function mapOutsideStrings(formula: string, fn: (part: string) => string): string {
-  // Zeichenketten in Anführungszeichen unverändert lassen
-  return formula
-    .split(/("(?:[^"]|"")*")/)
-    .map((part, i) => (i % 2 === 1 ? part : fn(part)))
-    .join('');
-}
-
-/**
- * Passt eine Formel an, nachdem unter Zeile `row` `count` Kopien dieser Zeile eingefügt wurden.
- * Bezüge unterhalb von `row` rutschen nach unten, Bereiche, die in `row` enden, werden erweitert
- * (z. B. SUMME(C5:C5) → SUMME(C5:C9)).
- */
-export function shiftFormulaForInsert(formula: string, row: number, count: number): string {
-  if (count <= 0) return formula;
-  return mapOutsideStrings(formula, (part) =>
-    part.replace(REF, (_m, pre, c1a, c1, r1a, r1s, c2a, c2, r2a, r2s) => {
-      let r1 = Number(r1s);
-      if (r1 > row) r1 += count;
-      if (c2 === undefined) return `${pre}${c1a}${c1}${r1a}${r1}`;
-      let r2 = Number(r2s);
-      if (r2 >= row) r2 += count;
-      return `${pre}${c1a}${c1}${r1a}${r1}:${c2a}${c2}${r2a}${r2}`;
-    }),
-  );
-}
-
-/** Verschiebt relative Zeilenbezüge (ohne $) um `delta` – wie beim Kopieren einer Zeile in Excel. */
-export function shiftRelativeRows(formula: string, delta: number): string {
-  if (delta === 0) return formula;
-  return mapOutsideStrings(formula, (part) =>
-    part.replace(REF, (_m, pre, c1a, c1, r1a, r1s, c2a, c2, r2a, r2s) => {
-      const r1 = r1a ? Number(r1s) : Number(r1s) + delta;
-      if (c2 === undefined) return `${pre}${c1a}${c1}${r1a}${r1}`;
-      const r2 = r2a ? Number(r2s) : Number(r2s) + delta;
-      return `${pre}${c1a}${c1}${r1a}${r1}:${c2a}${c2}${r2a}${r2}`;
-    }),
-  );
 }

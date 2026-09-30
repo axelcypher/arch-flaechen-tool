@@ -201,6 +201,26 @@ Geschosseigenschaften lässt sich das je Geschoss neu zuordnen („automatisch n
 Die vollständige Liste steht im Excel-Dialog unter **Platzhalter anzeigen** und im Blatt „Platzhalter“
 der Muster-Vorlage.
 
+## GRZ-Nachweis
+
+Der GRZ-Nachweis (`apps/grz`) nutzt dieselbe Vorlagen-Engine mit eigenen Werten. Seine Vorlage wird getrennt
+von der des Flächenrechners gespeichert (im Projektarchiv als eigene Datei, im Browser unter eigenem
+Schlüssel); ein Projekt kann also beide Vorlagen enthalten. Das Standardlayout ist die Muster-Vorlage
+(Blatt „GRZ GFZ“) ohne Hilfeblatt.
+
+| Schreibweise | Wirkung |
+|---|---|
+| `{{grz}}`, `{{grz.zulaessig}}`, `{{grz.flaeche}}`, `{{grz.reserve}}`, `{{grz.status}}` | GRZ (vor 1990) bzw. GRZ I; ebenso `grz.ii.*` und `gfz.*` |
+| `{{vollgeschosse}}`, `{{vollgeschosse.roemisch}}`, `{{vollgeschosse.namen}}` | Zahl bzw. Namen der Vollgeschosse |
+| `{{baunvo.fassung}}`, `{{bauo.fassung}}`, `{{bplan.datum}}` | angewandtes Recht |
+| `{{bilanz.gebaeude}}`, `{{bilanz.vollversiegelt}}` … | Flächenbilanz |
+| `{{geschoss.name}}`, `{{geschoss.begruendung}}`, `{{geschoss.gf}}` | Zeile je Geschoss; Filter `[vollgeschoss]`, `[!vollgeschoss]` |
+| `{{lageplan[eigen].name}}`, `{{lageplan.anrechnung}}` | Zeile je Lageplan-Fläche; Filter `[eigen]`, `[nachbar]`, `[pruefen]`, `[teil]` … |
+| `{{raum[gf].name}}` | Räume der Nicht-Vollgeschosse, deren Aufenthaltsräume vor 1990 zur Geschossfläche zählen |
+| `{{hinweis.text}}` | Zeile je Hinweis |
+
+Projektangaben (`projekt.*`, `grundstueck.*`, `bauherr.*`, `datum`) sind in beiden Apps gleich.
+
 ## Einschränkungen
 
 - Nur `.xlsx` (kein `.xls`/`.xlsm`)

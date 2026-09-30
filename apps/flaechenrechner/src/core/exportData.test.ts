@@ -27,8 +27,8 @@ describe('Excel-Vorlagen', () => {
 
   it('erkennt Wiederholungszeilen und setzt Zeilenwerte ein', () => {
     const c = ctx();
-    expect(repeatCollection(['Summe', '{{raum.name}}'])).toBe('raum');
-    expect(repeatCollection(['{{summe.bgf}}'])).toBeNull();
+    expect(repeatCollection(['Summe', '{{raum.name}}'], c)).toBe('raum');
+    expect(repeatCollection(['{{summe.bgf}}'], c)).toBeNull();
     const row = c.collections.raum[0];
     expect(resolveText('{{raum.flaeche}}', c, { collection: 'raum', row })).toBe(20);
     expect(resolveText('{{raum.nummer}} {{raum.name}}', c, { collection: 'raum', row })).toBe('0.01 Wohnen');

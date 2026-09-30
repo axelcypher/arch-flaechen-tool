@@ -6,6 +6,7 @@ import { Field, NumberField, TextField } from '@core/ui/fields';
 import type { Anrechnung, Kennzahl, Status } from '../massNutzung';
 import { anrechnungRegel, BAUNVO_FASSUNGEN, BAUO_FASSUNGEN, baunvoLabel, bauoLabel, istAufenthaltsraum, massNachweis, recht } from '../massNutzung';
 import { mapFlaeche, removeFlaeche, setMassNutzung, useGrz } from '../store';
+import { AUFENTHALT, ANRECHNUNG, GF_ART, HAFTUNG, roemisch, STATUS, zahl } from '../texte';
 import { LageplanEditor } from './LageplanEditor';
 
 /**
@@ -285,7 +286,7 @@ export function GrzGfzView() {
             {n.gfJeGeschoss.map((g) => (
               <tr key={g.storeyId}>
                 <td>{g.name}</td>
-                <td className="muted small-text">{g.art === 'vollgeschoss' ? 'Vollgeschoss, Außenmaße (ohne Balkone, Loggien, Terrassen)' : g.art === 'aufenthalt' ? 'Aufenthaltsräume mit Treppenräumen und Umfassungswänden' : 'zählt nicht'}</td>
+                <td className="muted small-text">{GF_ART[g.art]}</td>
                 <td className="num">{fmt2(g.flaeche)} m²</td>
               </tr>
             ))}
@@ -367,32 +368,15 @@ export function GrzGfzView() {
             </ul>
           </>
         )}
-        <p className="muted small-text">Das Tool rechnet nach und zeigt die angewandte Fassung; die Verantwortung für den Nachweis bleibt bei der Entwurfsverfasserin bzw. dem Entwurfsverfasser.</p>
+        <p className="muted small-text">{HAFTUNG}</p>
       </section>
     </div>
   );
 }
 
-const AUFENTHALT = { ja: 'Aufenthaltsraum', nein: 'kein Aufenthaltsraum', treppe: 'Treppenraum' } as const;
-
-const STATUS: Record<Status, { label: string; cls: string }> = {
-  ok: { label: 'eingehalten', cls: 'ok' },
-  ueberschritten: { label: 'überschritten', cls: 'bad' },
-  pruefen: { label: 'prüfen', cls: 'warn' },
-  offen: { label: 'Festsetzung fehlt', cls: 'off' },
-};
-
-function StatusPill({ s }: { s: Status }) {
+export function StatusPill({ s }: { s: Status }) {
   return <span className={`pill ${STATUS[s].cls}`}>{STATUS[s].label}</span>;
 }
-
-const ANRECHNUNG: Record<Anrechnung, string> = {
-  hauptanlage: 'zählt',
-  grz2: 'GRZ II',
-  garage01: 'bis 0,1 frei',
-  nein: 'zählt nicht',
-  pruefen: 'prüfen',
-};
 
 function AnrechnungPill({ a, baunvo }: { a: Anrechnung; baunvo: BauNVOFassung }) {
   const cls = a === 'pruefen' ? 'warn' : a === 'nein' ? 'off' : 'ok';
@@ -402,8 +386,6 @@ function AnrechnungPill({ a, baunvo }: { a: Anrechnung; baunvo: BauNVOFassung })
     </span>
   );
 }
-
-const zahl = (v: number) => v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function KpiZeile({ titel, k, einheit, flaeche }: { titel: string; k: Kennzahl; einheit: string; flaeche: number }) {
   return (
@@ -423,9 +405,4 @@ function KpiZeile({ titel, k, einheit, flaeche }: { titel: string; k: Kennzahl; 
       </div>
     </div>
   );
-}
-
-function roemisch(n: number): string {
-  const r = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-  return n >= 0 && n <= 10 ? r[n] || '0' : String(n);
 }

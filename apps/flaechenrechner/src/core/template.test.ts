@@ -3,8 +3,8 @@ import { computeProject } from '@core/calc';
 import { buildExportContext } from './exportData';
 import { rectPoints } from '@core/geometry';
 import { createOutline, createProject, createRoom, createStorey } from '@core/model';
-import type { CellValue, TemplateRow } from './template';
-import { expandTemplate } from './template';
+import type { CellValue, TemplateRow } from '@core/excel/template';
+import { expandTemplate } from '@core/excel/template';
 
 function project() {
   const p = createProject('EFH Sander');

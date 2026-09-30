@@ -4,7 +4,7 @@ import { bounds, pointInPolygon, polygonArea } from '@core/geometry';
 import { nutzungLabel, versiegelungInfo } from '@core/lageplan';
 import { createLageplanFlaeche } from '@core/model';
 import type { Nachweis } from '../massNutzung';
-import { addFlaeche, removeFlaeche, useGrz } from '../store';
+import { addFlaeche, mapFlaeche, removeFlaeche, useGrz } from '../store';
 import type { Werkzeug } from '../store';
 
 interface Ausschnitt {
@@ -18,14 +18,28 @@ interface Ausschnitt {
 const FANG_PX = 10;
 
 const WERKZEUGE: { id: Werkzeug; label: string; hint: string }[] = [
-  { id: 'auswahl', label: 'Auswahl', hint: 'Fläche anklicken; Entf löscht die ausgewählte Fläche' },
+  {
+    id: 'auswahl',
+    label: 'Auswahl',
+    hint: 'Fläche anklicken; Ecken ziehen verschiebt, Mittelpunkt ziehen fügt eine Ecke ein, Doppelklick auf eine Ecke löscht sie; Entf löscht die Fläche',
+  },
   { id: 'polygon', label: 'Polygon', hint: 'Punkte setzen, ersten Punkt oder Doppelklick/Enter schließt; Rück löscht den letzten Punkt, Esc bricht ab' },
   { id: 'rechteck', label: 'Rechteck', hint: 'erste Ecke, dann Gegenecke klicken' },
 ];
 
+/** Ziehen einer Ecke (bzw. eines Kantenmittelpunkts, der dann zur neuen Ecke wird) */
+interface Ziehen {
+  id: string;
+  index: number;
+  einfuegen: boolean;
+  p: Point;
+  bewegt: boolean;
+}
+
 /**
  * Lageplan: Gebäude (Hauptanlage), Grundstück und Lageplan-Flächen. Flächen lassen sich auswählen,
- * als Polygon oder Rechteck zeichnen und löschen; Ecken von Gebäude und Flächen werden gefangen.
+ * als Polygon oder Rechteck zeichnen, ihre Ecken verschieben, einfügen und löschen; Ecken von Gebäude
+ * und Flächen werden gefangen.
  */
 export function LageplanEditor({ n }: { n: Nachweis }) {
   const project = useGrz((s) => s.project);
@@ -37,6 +51,9 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
   const [draft, setDraft] = useState<Point[]>([]);
   const [cursor, setCursor] = useState<Point | null>(null);
   const pan = useRef<{ sx: number; sy: number; vb: Ausschnitt } | null>(null);
+  const [ziehen, setZiehen] = useState<Ziehen | null>(null);
+  // nach dem Ziehen keinen Klick (Auswahl) auslösen
+  const gezogen = useRef(false);
 
   // Ausschnitt: eingepasst auf Gebäude und Flächen; neu beim Öffnen eines anderen Projekts
   const passend = useMemo<Ausschnitt>(() => {
@@ -59,23 +76,24 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
     return Math.max(vb.w / wPx, vb.h / hPx);
   };
 
+  // Bildschirm → Plan (viewBox mit xMidYMid meet: Ausschnitt mittig, gleicher Maßstab in x und y)
   const toWorld = (e: { clientX: number; clientY: number }): Point => {
-    const el = svgRef.current;
-    const m = el?.getScreenCTM?.();
-    if (!el || !m) return { x: 0, y: 0 };
-    const pt = el.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    const p = pt.matrixTransform(m.inverse());
-    return { x: p.x, y: p.y };
+    const r = svgRef.current?.getBoundingClientRect();
+    const wPx = r?.width || 600;
+    const hPx = r?.height || 400;
+    const s = Math.max(vb.w / wPx, vb.h / hPx);
+    const x0 = vb.x - (wPx * s - vb.w) / 2;
+    const y0 = vb.y - (hPx * s - vb.h) / 2;
+    return { x: x0 + (e.clientX - (r?.left ?? 0)) * s, y: y0 + (e.clientY - (r?.top ?? 0)) * s };
   };
 
   const fangpunkte = useMemo(() => [...n.hauptanlagePolygone.flat(), ...flaechen.flatMap((f) => f.points)], [n.hauptanlagePolygone, flaechen]);
-  const fang = (p: Point): Point => {
+  const fang = (p: Point, ohne?: Point): Point => {
     const r = FANG_PX * skala();
     let best: Point | null = null;
     let d = r;
     for (const q of [...fangpunkte, ...draft]) {
+      if (q === ohne) continue;
       const dd = Math.hypot(q.x - p.x, q.y - p.y);
       if (dd < d) {
         d = dd;
@@ -95,6 +113,10 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
 
   const onClick = (e: React.MouseEvent) => {
     if (e.button !== 0 || e.altKey) return;
+    if (gezogen.current) {
+      gezogen.current = false;
+      return;
+    }
     const p = fang(toWorld(e));
     if (werkzeug === 'auswahl') {
       const hit = [...flaechen].reverse().find((f) => pointInPolygon(p, f.points));
@@ -131,7 +153,23 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
       (e.target as Element).setPointerCapture?.(e.pointerId);
     }
   };
+  const eckeGreifen = (e: React.PointerEvent, id: string, index: number, einfuegen: boolean, p: Point) => {
+    if (e.button !== 0 || e.altKey) return;
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    setZiehen({ id, index, einfuegen, p, bewegt: false });
+  };
+  const eckeLoeschen = (e: React.MouseEvent, id: string, index: number) => {
+    e.stopPropagation();
+    st.update((p) => mapFlaeche(p, id, (f) => (f.points.length > 3 ? { ...f, points: f.points.filter((_, i) => i !== index) } : f)));
+  };
+
   const onPointerMove = (e: React.PointerEvent) => {
+    if (ziehen) {
+      const f = flaechen.find((x) => x.id === ziehen.id);
+      setZiehen({ ...ziehen, p: fang(toWorld(e), ziehen.einfuegen ? undefined : f?.points[ziehen.index]), bewegt: true });
+      return;
+    }
     if (pan.current) {
       const k = skala();
       const { sx, sy, vb: v } = pan.current;
@@ -140,7 +178,14 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
     }
     if (werkzeug !== 'auswahl') setCursor(fang(toWorld(e)));
   };
-  const onPointerUp = () => (pan.current = null);
+  const onPointerUp = () => {
+    pan.current = null;
+    if (!ziehen) return;
+    setZiehen(null);
+    if (!ziehen.bewegt) return;
+    gezogen.current = true;
+    st.update((p) => mapFlaeche(p, ziehen.id, (f) => ({ ...f, points: mitGezogen(f.points, ziehen) })));
+  };
 
   // Tastatur: Enter schließt, Esc bricht ab, Rück löscht den letzten Punkt, Entf löscht die Auswahl
   useEffect(() => {
@@ -160,6 +205,8 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
 
   const k = skala();
   const d = (pts: Point[], zu = true) => `M${pts.map((p) => `${p.x} ${p.y}`).join('L')}${zu ? 'Z' : ''}`;
+  const sel = flaechen.find((f) => f.id === selected);
+  const punkteSel = sel ? (ziehen?.id === sel.id && ziehen.bewegt ? mitGezogen(sel.points, ziehen) : sel.points) : [];
   const vorschau = draft.length && cursor ? (werkzeug === 'rechteck' ? rechteck(draft[0], cursor) : [...draft, cursor]) : draft;
 
   return (
@@ -196,7 +243,7 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
         {flaechen.map((f) => (
           <path
             key={f.id}
-            d={d(f.points)}
+            d={d(ziehen?.id === f.id && ziehen.bewegt ? mitGezogen(f.points, ziehen) : f.points)}
             fill={versiegelungInfo(f.versiegelung).color}
             fillOpacity={f.nachbar ? 0.15 : 0.55}
             stroke={f.id === selected ? 'var(--sel)' : f.nachbar ? '#9aa0a6' : '#5b6068'}
@@ -220,10 +267,52 @@ export function LageplanEditor({ n }: { n: Nachweis }) {
             ))}
           </g>
         )}
+        {werkzeug === 'auswahl' && sel && (
+          <g className="lp-ecken">
+            {punkteSel.map((p, i) => {
+              const q = punkteSel[(i + 1) % punkteSel.length];
+              const m = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+              return (
+                <rect
+                  key={`m${i}`}
+                  x={m.x - k * 3}
+                  y={m.y - k * 3}
+                  width={k * 6}
+                  height={k * 6}
+                  className="lp-mitte"
+                  strokeWidth={k * 1.2}
+                  onPointerDown={(e) => eckeGreifen(e, sel.id, i, true, m)}
+                >
+                  <title>Ziehen fügt hier eine Ecke ein</title>
+                </rect>
+              );
+            })}
+            {punkteSel.map((p, i) => (
+              <circle
+                key={`e${i}`}
+                cx={p.x}
+                cy={p.y}
+                r={k * 5}
+                className="lp-ecke"
+                strokeWidth={k * 1.5}
+                onPointerDown={(e) => eckeGreifen(e, sel.id, i, false, p)}
+                onDoubleClick={(e) => eckeLoeschen(e, sel.id, i)}
+              >
+                <title>Ecke ziehen; Doppelklick löscht sie</title>
+              </circle>
+            ))}
+          </g>
+        )}
         {cursor && werkzeug !== 'auswahl' && <circle cx={cursor.x} cy={cursor.y} r={k * 3} fill="var(--sel)" pointerEvents="none" />}
       </svg>
     </div>
   );
+}
+
+/** Punkte mit der gezogenen (bzw. eingefügten) Ecke */
+function mitGezogen(pts: Point[], z: Ziehen): Point[] {
+  if (z.einfuegen) return [...pts.slice(0, z.index + 1), z.p, ...pts.slice(z.index + 1)];
+  return pts.map((p, i) => (i === z.index ? z.p : p));
 }
 
 function rechteck(a: Point, b: Point): Point[] {

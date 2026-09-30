@@ -148,7 +148,7 @@ function normalizeMassNutzung(m: Record<string, unknown>): MassNutzung {
   return out;
 }
 
-const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage'];
+const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage', 'vorlage-grz'];
 
 function normalizeDatei(d: Record<string, unknown>): ProjektDatei | null {
   if (!(d.daten instanceof Uint8Array) || !DATEI_ARTEN.includes(d.art as DateiArt)) return null;

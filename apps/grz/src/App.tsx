@@ -3,7 +3,9 @@ import { isTauri } from '@core/platform/files';
 import { logger } from '@core/platform/log';
 import { LogDialog } from '@core/ui/LogDialog';
 import { TitleBar } from '@core/ui/TitleBar';
+import { ExcelDialog } from './components/ExcelDialog';
 import { GrzGfzView } from './components/GrzGfzView';
+import { NachweisDruck } from './components/NachweisDruck';
 import { oeffnen, speichern } from './datei';
 import { useGrz } from './store';
 
@@ -16,6 +18,8 @@ export function App() {
   const canUndo = useGrz((s) => s.past.length > 0);
   const canRedo = useGrz((s) => s.future.length > 0);
   const [logOpen, setLogOpen] = useState(false);
+  const [excelOpen, setExcelOpen] = useState(false);
+  const [druckOpen, setDruckOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [bericht, setBericht] = useState<string[]>([]);
 
@@ -60,6 +64,9 @@ export function App() {
       } else if (k === 'o') {
         e.preventDefault();
         void onOpen();
+      } else if (k === 'p' && hatGebaeude) {
+        e.preventDefault();
+        setDruckOpen(true);
       } else if (k === 'z' && !e.shiftKey) {
         e.preventDefault();
         useGrz.getState().undo();
@@ -90,6 +97,14 @@ export function App() {
           </button>
           <button onClick={onSave} title={isTauri() ? 'Projekt speichern (Strg+S)' : 'Projekt als Datei herunterladen (Strg+S)'}>
             Speichern{dirty ? ' •' : ''}
+          </button>
+        </div>
+        <div className="tb-group">
+          <button onClick={() => setDruckOpen(true)} disabled={!hatGebaeude} title="Druckbarer Nachweis – über den Druckdialog auch als PDF (Strg+P)">
+            Nachweis drucken
+          </button>
+          <button onClick={() => setExcelOpen(true)} disabled={!hatGebaeude} title="Nachweis als Excel-Datei – Standardlayout oder eigene Vorlage">
+            Excel …
           </button>
         </div>
         <div className="tb-group">
@@ -130,6 +145,8 @@ export function App() {
         )}
         <GrzGfzView />
       </main>
+      {druckOpen && <NachweisDruck onClose={() => setDruckOpen(false)} />}
+      {excelOpen && <ExcelDialog onClose={() => setExcelOpen(false)} />}
       {logOpen && <LogDialog onClose={() => setLogOpen(false)} />}
     </div>
   );

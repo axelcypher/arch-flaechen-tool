@@ -2,36 +2,14 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { rectPoints } from '@core/geometry';
-import type { Project, Storey } from '@core/model';
-import { createLageplanFlaeche, createOutline, createProject, createRoom, createStorey } from '@core/model';
+import { createProject } from '@core/model';
 import { App } from './App';
 import { GrzGfzView } from './components/GrzGfzView';
+import { NachweisDruck } from './components/NachweisDruck';
 import { useGrz } from './store';
+import { projekt } from './testdaten';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function projekt(): Project {
-  const p = createProject('GRZ-Test');
-  const rect = rectPoints({ x: 0, y: 0 }, { x: 12, y: 11.25 });
-  const st = (name: string, e: number, h: number): Storey => ({ ...createStorey(name, h), elevation: e, shapes: [createOutline(rect)] });
-  const eg = st('EG', 0, 3.45);
-  const og = st('OG', 3.45, 3.2);
-  const dg = st('DG', 6.65, 3);
-  const o = dg.shapes[0];
-  if (o.kind === 'outline') o.dach = { typ: 'walm', traufhoehe: 0, neigung: 45, neigungWalm: 45, firstrichtung: 0 };
-  dg.shapes.push(createRoom(rectPoints({ x: 3, y: 3 }, { x: 9, y: 8.25 }), '1', 'Zimmer I'));
-  p.storeys = [eg, og, dg];
-  p.lageplan = {
-    flaechen: [
-      { ...createLageplanFlaeche(rectPoints({ x: 12, y: 0 }, { x: 15, y: 10 }), 'Zufahrt'), nutzung: 'zufahrt', versiegelung: 'teil', hoehe: -0.2 },
-      { ...createLageplanFlaeche(rectPoints({ x: -3, y: 0 }, { x: 0, y: 5 }), 'Terrasse'), nutzung: 'terrasse', versiegelung: 'voll' },
-    ],
-  };
-  p.meta.grundstueck.flaeche = 612.5;
-  p.massNutzung = { planDatum: '1967-03-14', grz: 0.4, gfz: 0.5, vollgeschosseMax: 2, gelaende: -0.2 };
-  return p;
-}
 
 let root: ReturnType<typeof createRoot> | null = null;
 function render(el: Parameters<typeof createElement>[0]): HTMLElement {
@@ -111,5 +89,67 @@ describe('GRZ-Nachweis', () => {
     expect(useGrz.getState().project.lageplan!.flaechen.map((f) => f.name)).toEqual(['Zufahrt']);
     act(() => useGrz.getState().undo());
     expect(useGrz.getState().project.lageplan!.flaechen).toHaveLength(2);
+  });
+
+  it('druckbarer Nachweis mit Grundlagen, Ergebnis, Lageplan und Aufenthaltsräumen', () => {
+    useGrz.getState().load(projekt());
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    act(() => {
+      root = createRoot(host);
+      root.render(createElement(NachweisDruck, { onClose: () => {} }));
+    });
+    const text = host.textContent ?? '';
+    expect(text).toContain('Nachweis des Maßes der baulichen Nutzung');
+    expect(text).toContain('14.3.1967');
+    expect(text).toContain('BauNVO 1962');
+    expect(text).toContain('Hauptanlage (Gebäude)');
+    expect(text).toContain('Aufenthaltsräume in Nicht-Vollgeschossen');
+    expect(text).toContain('Zimmer I');
+    // Lageplan mit Nummern der eigenen Flächen
+    expect([...host.querySelectorAll('.plan-svg text')].map((t) => t.textContent)).toEqual(['1', '2']);
+  });
+
+  it('öffnet Druck und Excel über die Werkzeugleiste', () => {
+    useGrz.getState().load(projekt());
+    const host = render(App);
+    const btn = (t: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith(t)) as HTMLButtonElement;
+    act(() => btn('Nachweis drucken').click());
+    expect(host.querySelector('.grz-report')).not.toBeNull();
+    act(() => btn('Schließen').click());
+    act(() => btn('Excel').click());
+    expect(host.textContent).toContain('Muster-Vorlage herunterladen');
+  });
+
+  it('verschiebt, ergänzt und löscht Ecken einer Fläche', () => {
+    useGrz.getState().load(projekt());
+    const host = render(GrzGfzView);
+    const id = useGrz.getState().project.lageplan!.flaechen[0].id;
+    act(() => useGrz.getState().select(id));
+    const svg = host.querySelector('svg.grz-skizze') as SVGSVGElement;
+    const punkte = () => useGrz.getState().project.lageplan!.flaechen[0].points;
+    const vorher = punkte().map((p) => ({ ...p }));
+    // je Ereignis ein eigenes act(), damit der Zustand dazwischen gerendert wird
+    const ziehe = (el: Element) => {
+      act(() => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })));
+      act(() => svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 50, clientY: 50 })));
+      act(() => svg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 50, clientY: 50 })));
+    };
+    // Ecke ziehen: eine Ecke ändert sich, die Zahl bleibt
+    ziehe(host.querySelectorAll('.lp-ecke')[2]);
+    expect(punkte()).toHaveLength(4);
+    expect(punkte()[2]).not.toEqual(vorher[2]);
+    expect(punkte()[0]).toEqual(vorher[0]);
+    act(() => useGrz.getState().undo());
+    expect(punkte()).toEqual(vorher);
+    // Kantenmitte ziehen fügt eine Ecke ein
+    ziehe(host.querySelectorAll('.lp-mitte')[0]);
+    expect(punkte()).toHaveLength(5);
+    // Doppelklick löscht eine Ecke, aber nie unter drei
+    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(punkte()).toHaveLength(4);
+    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(punkte()).toHaveLength(3);
   });
 });

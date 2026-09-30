@@ -78,11 +78,12 @@ Ein Repository mit npm-Workspaces, zwei Apps und einem gemeinsamen Unterbau:
 packages/core/       gemeinsamer Unterbau (TypeScript-Quelltext, in den Apps als @core/… eingebunden)
   src/               Geometrie, Projektformat (.oap/.akhp), IFC-Import, Dachformen und Gauben, DIN-277-
                      Berechnung, Lageplan-Flächen
+  src/excel/         Excel-Vorlagen-Engine (Platzhalter, Blöcke, Formeln), Vorlagenspeicher
   src/platform/      Speichern/Öffnen (Tauri-Dialog bzw. Download), web-ifc, Protokoll, Farbschema
-  src/ui/            Titelleiste, Protokoll-Fenster, Eingabefelder, Grund-Styles (base.css)
+  src/ui/            Titelleiste, Protokoll-Fenster, Excel-Dialog, Eingabefelder, Grund-Styles (base.css)
   tauri/commands.rs  gemeinsame Tauri-Befehle, per include! in beide Tauri-Hüllen eingebunden
 apps/flaechenrechner/  Flächenrechner (dieses Tool): Zeichenfläche, Bericht, Excel, DXF/PDF, 3D
-apps/grz/              GRZ/GFZ-Nachweis – siehe docs/grz-gfz.md
+apps/grz/              GRZ/GFZ-Nachweis: Lageplan, Nachweis zum Drucken, Excel – siehe docs/grz-gfz.md
 ```
 
 Jede App hat ihre eigene Tauri-Hülle (`apps/<app>/src-tauri`), eigenen Installer und eigene Releases.

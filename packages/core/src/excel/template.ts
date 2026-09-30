@@ -1,5 +1,7 @@
-import type { Collection, ExportContext, Row, Value } from './exportData';
-import { belongsTo, COLLECTIONS, parseFilters } from './exportData';
+import type { ExportContext, Row, Value } from './context';
+import { belongsTo, isCollection, lookupNamed, parseFilters } from './context';
+
+type Collection = string;
 
 /**
  * Vorlagen-Engine für Tabellen (unabhängig von Excel-Bibliotheken).
@@ -40,12 +42,12 @@ interface KeyInfo {
   coll?: Collection;
   filter?: string;
   field?: string;
-  named?: { coll: 'geschoss' | 'wohnung'; name: string; field: string };
+  named?: string;
   scalar?: string;
   mod?: string;
 }
 
-function parseKey(raw: string): KeyInfo {
+function parseKey(raw: string, ctx: ExportContext): KeyInfo {
   let key = raw.trim();
   let mod: string | undefined;
   const pipe = key.lastIndexOf('|');
@@ -53,10 +55,10 @@ function parseKey(raw: string): KeyInfo {
     mod = key.slice(pipe + 1).trim().toLowerCase();
     key = key.slice(0, pipe).trim();
   }
-  const named = /^(geschoss|wohnung):(.+)\.([a-z0-9_]+)$/i.exec(key);
-  if (named) return { named: { coll: named[1].toLowerCase() as 'geschoss' | 'wohnung', name: named[2].trim(), field: named[3] }, mod };
+  const named = /^([a-z]+):(.+)\.([a-z0-9_]+)$/i.exec(key);
+  if (named && ctx.byName?.[named[1].toLowerCase()]) return { named: key, mod };
   const m = /^([a-z]+)(?:\[([^\]]*)\])?\.([a-z0-9_]+)$/i.exec(key);
-  if (m && (COLLECTIONS as readonly string[]).includes(m[1].toLowerCase())) return { coll: m[1].toLowerCase() as Collection, filter: m[2], field: m[3], mod };
+  if (m && isCollection(ctx, m[1].toLowerCase())) return { coll: m[1].toLowerCase(), filter: m[2], field: m[3], mod };
   return { scalar: key, mod };
 }
 
@@ -66,13 +68,10 @@ function cellText(v: CellValue | undefined): string | null {
   return null;
 }
 
-type Bindings = Partial<Record<Collection, Row>>;
+type Bindings = Record<Collection, Row | undefined>;
 
 function lookup(k: KeyInfo, ctx: ExportContext, b: Bindings): Value | undefined {
-  if (k.named) {
-    const row = ctx.byName[k.named.coll].get(k.named.name);
-    return row ? (row[k.named.field] ?? '') : '';
-  }
+  if (k.named) return lookupNamed(k.named, ctx);
   if (k.coll && k.field) {
     const row = b[k.coll];
     if (!row) return undefined;
@@ -86,14 +85,14 @@ function lookup(k: KeyInfo, ctx: ExportContext, b: Bindings): Value | undefined 
 function resolveCell(text: string, ctx: ExportContext, b: Bindings, firstOfRepeat: boolean): CellValue {
   const whole = /^\s*\{\{\s*([^{}]+?)\s*\}\}\s*$/.exec(text);
   if (whole) {
-    const k = parseKey(whole[1]);
+    const k = parseKey(whole[1], ctx);
     if (k.mod === 'einmal' && !firstOfRepeat) return null;
     const v = lookup(k, ctx, b);
     if (v === undefined) return text;
     return v === '' ? null : v;
   }
   const out = text.replace(PH(), (m, key: string) => {
-    const k = parseKey(key);
+    const k = parseKey(key, ctx);
     if (k.mod === 'einmal' && !firstOfRepeat) return '';
     const v = lookup(k, ctx, b);
     if (v === undefined) return m;
@@ -119,7 +118,7 @@ interface RowNode {
 }
 type Node = BlockNode | RowNode;
 
-function parseStructure(rows: TemplateRow[]): { nodes: Node[]; blocksOfRow: Map<number, number[]> } {
+function parseStructure(rows: TemplateRow[], ctx: ExportContext): { nodes: Node[]; blocksOfRow: Map<number, number[]> } {
   const root: Node[] = [];
   const stack: BlockNode[] = [];
   const blocksOfRow = new Map<number, number[]>();
@@ -142,10 +141,10 @@ function parseStructure(rows: TemplateRow[]): { nodes: Node[]; blocksOfRow: Map<
         const inner = m[1].trim();
         const s = BLOCK_START.exec(inner);
         const e = BLOCK_END.exec(inner);
-        if (s && (COLLECTIONS as readonly string[]).includes(s[1].toLowerCase())) {
-          start = { coll: s[1].toLowerCase() as Collection, filter: s[2] };
+        if (s && isCollection(ctx, s[1].toLowerCase())) {
+          start = { coll: s[1].toLowerCase(), filter: s[2] };
           rest = rest.replace(m[0], '');
-        } else if (e && (COLLECTIONS as readonly string[]).includes(e[1].toLowerCase())) {
+        } else if (e && isCollection(ctx, e[1].toLowerCase())) {
           end = true;
           rest = rest.replace(m[0], '');
         }
@@ -184,14 +183,14 @@ interface OutMeta {
   empty?: boolean;
 }
 
-function rowRepeat(row: TemplateRow, bound: Bindings): { coll: Collection; filter?: string } | null {
+function rowRepeat(row: TemplateRow, bound: Bindings, ctx: ExportContext): { coll: Collection; filter?: string } | null {
   let coll: Collection | undefined;
   const filters = new Set<string>();
   for (const v of row.cells.values()) {
     const t = cellText(v);
     if (!t) continue;
     for (const m of t.matchAll(PH())) {
-      const k = parseKey(m[1]);
+      const k = parseKey(m[1], ctx);
       if (!k.coll || bound[k.coll]) continue;
       coll ??= k.coll;
       // alle Filter der Sammlung in dieser Zeile gelten gemeinsam (z. B. {{raum.nummer}} … {{raum[wofl].name}})
@@ -203,15 +202,15 @@ function rowRepeat(row: TemplateRow, bound: Bindings): { coll: Collection; filte
 }
 
 function itemsFor(coll: Collection, filter: string | undefined, bound: Bindings, ctx: ExportContext): Row[] {
-  const preds = parseFilters(filter);
-  return ctx.collections[coll].filter((row) => {
-    for (const [pc, pr] of Object.entries(bound) as [Collection, Row][]) if (!belongsTo(coll, row, pc, pr, ctx)) return false;
+  const preds = parseFilters(filter, ctx.filters);
+  return (ctx.collections[coll] ?? []).filter((row) => {
+    for (const [pc, pr] of Object.entries(bound)) if (pr && !belongsTo(coll, row, pc, pr, ctx)) return false;
     return preds.every((p) => p(row));
   });
 }
 
 export function expandTemplate(rows: TemplateRow[], ctx: ExportContext): OutputRow[] {
-  const { nodes, blocksOfRow } = parseStructure(rows);
+  const { nodes, blocksOfRow } = parseStructure(rows, ctx);
   const metas: OutMeta[] = [];
 
   // liefert: Anzahl Wiederholungszeilen und davon erzeugte Datensatzzeilen (für „leere Blöcke entfallen“)
@@ -220,7 +219,7 @@ export function expandTemplate(rows: TemplateRow[], ctx: ExportContext): OutputR
     let produced = 0;
     for (const n of list) {
       if (n.kind === 'row') {
-        const rep = rowRepeat(n.row, bound);
+        const rep = rowRepeat(n.row, bound, ctx);
         if (!rep) {
           metas.push({ src: n.row.r, inst, bindings: bound, first: true });
           continue;

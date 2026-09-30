@@ -55,8 +55,10 @@ zählen nirgends mit.
 
 Bedienung im Lageplan: Werkzeug „Polygon“ (Punkte setzen, ersten Punkt, Doppelklick oder Enter schließt,
 Rück löscht den letzten Punkt, Esc bricht ab) oder „Rechteck“ (zwei Ecken); Ecken von Gebäude und Flächen
-werden gefangen. „Auswahl“ wählt eine Fläche, Entf löscht sie. Mausrad zoomt, mittlere Maustaste oder
-Alt+Ziehen verschiebt, „Einpassen“ zeigt alles.
+werden gefangen. „Auswahl“ wählt eine Fläche, Entf löscht sie. An der ausgewählten Fläche lassen sich die
+Ecken ziehen (mit Fang), das Quadrat in der Kantenmitte fügt beim Ziehen eine neue Ecke ein, ein Doppelklick
+auf eine Ecke löscht sie (mindestens drei bleiben). Jede Änderung ist ein Rückgängig-Schritt. Mausrad zoomt,
+mittlere Maustaste oder Alt+Ziehen verschiebt, „Einpassen“ zeigt alles.
 
 ### IFC-Import
 
@@ -97,7 +99,14 @@ Alt+Ziehen verschiebt, „Einpassen“ zeigt alles.
 
 - Kennzahlen mit Ampel und Reserve, Vollgeschossprüfung mit Begründung, Geschossfläche je Geschoss,
   Flächenbilanz (Gebäude, voll-/teilversiegelt, grün) und Hinweise.
-- Ein druckbarer Nachweis und Excel-Platzhalter folgen in einer späteren Version.
+- **Nachweis drucken** (Strg+P): Nachweis auf A4 hoch – Grundlagen und Festsetzungen, Ergebnis-Tabelle, Lageplan
+  mit nummerierten Flächen, Grundfläche je Fläche mit Anrechnung, Vollgeschossprüfung mit Begründung,
+  Geschossfläche, vor 1990 die Aufenthaltsräume in Nicht-Vollgeschossen, Flächenbilanz, Hinweise und
+  Unterschriftszeile. Über den Druckdialog auch als PDF.
+- **Excel …**: Standardlayout (Blatt „GRZ GFZ“ mit Summenformeln) oder eigene Vorlage mit Platzhaltern wie
+  `{{grz}}`, `{{gfz}}`, `{{vollgeschosse}}`, `{{bilanz.*}}` und den Sammlungen `geschoss`, `lageplan`, `raum`,
+  `hinweis` – siehe [Excel-Vorlagen](excel-vorlagen.md#grz-nachweis). Die Vorlage wird wie im Flächenrechner im
+  Projekt mitgespeichert, aber getrennt von dessen Vorlage.
 
 Das Tool rechnet nach und zeigt die angewandte Fassung; die Verantwortung für den Nachweis bleibt bei der
 Entwurfsverfasserin bzw. dem Entwurfsverfasser.
