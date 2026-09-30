@@ -1,15 +1,25 @@
 name: Build & Release
 
-# Baut die Windows-Installer und veröffentlicht ein GitHub-Release, sobald sich die Version
-# (package.json) auf main ändert. Manuell startbar – dann wird die aktuelle Version (neu) gebaut.
+# Baut je App die Windows-Installer und veröffentlicht ein GitHub-Release, sobald sich die Version
+# der App (apps/<app>/package.json) auf main ändert. Manuell startbar – dann wird die gewählte App
+# in ihrer aktuellen Version (neu) gebaut.
+#
+#   Flächenrechner   apps/flaechenrechner   Tag v<version>
+#   GRZ-Nachweis     apps/grz               Tag grz-v<version>
 on:
   push:
     branches: [main]
     paths:
-      - package.json
-      - src-tauri/tauri.conf.json
-      - src-tauri/Cargo.toml
+      - apps/*/package.json
+      - apps/*/src-tauri/tauri.conf.json
+      - apps/*/src-tauri/Cargo.toml
   workflow_dispatch:
+    inputs:
+      app:
+        description: App
+        type: choice
+        options: [alle, flaechenrechner, grz]
+        default: alle
 
 permissions:
   contents: write
@@ -20,37 +30,48 @@ concurrency:
 
 jobs:
   version:
-    name: Version prüfen
+    name: Versionen prüfen
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.v.outputs.version }}
-      release: ${{ steps.v.outputs.release }}
+      matrix: ${{ steps.v.outputs.matrix }}
+      any: ${{ steps.v.outputs.any }}
     steps:
       - uses: actions/checkout@v4
       - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          WAHL: ${{ inputs.app }}
         run: |
-          v=$(node -p "require('./package.json').version")
-          t=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          c=$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
-          if [ "$v" != "$t" ] || [ "$v" != "$c" ]; then
-            echo "::error::Versionen uneinheitlich: package.json $v, tauri.conf.json $t, Cargo.toml $c"
-            exit 1
-          fi
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-          elif git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then
-            echo "Tag v$v existiert bereits – kein neues Release."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
-          fi
+          apps='[]'
+          for d in flaechenrechner grz; do
+            v=$(node -p "require('./apps/$d/package.json').version")
+            t=$(node -p "require('./apps/$d/src-tauri/tauri.conf.json').version")
+            c=$(grep -m1 '^version' "apps/$d/src-tauri/Cargo.toml" | cut -d'"' -f2)
+            if [ "$v" != "$t" ] || [ "$v" != "$c" ]; then
+              echo "::error::$d: Versionen uneinheitlich: package.json $v, tauri.conf.json $t, Cargo.toml $c"
+              exit 1
+            fi
+            if [ "$d" = "flaechenrechner" ]; then tag="v$v"; name="Flächenrechner"; web="flaechenrechner-web.zip"; else tag="$d-v$v"; name="GRZ-Nachweis"; web="grz-nachweis-web.zip"; fi
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              if [ "$WAHL" != "alle" ] && [ "$WAHL" != "$d" ]; then continue; fi
+            elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+              echo "$d: Tag $tag existiert bereits – kein neues Release."
+              continue
+            fi
+            apps=$(echo "$apps" | jq -c --arg d "$d" --arg v "$v" --arg tag "$tag" --arg name "$name" --arg web "$web" '. + [{app: $d, version: $v, tag: $tag, name: $name, web: $web}]')
+          done
+          echo "matrix={\"include\":$apps}" >> "$GITHUB_OUTPUT"
+          if [ "$apps" = "[]" ]; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
+          echo "Releases: $apps"
 
   windows:
-    name: Tauri (Windows) + Release
+    name: ${{ matrix.name }} (Windows) + Release
     needs: version
-    if: needs.version.outputs.release == 'true'
+    if: needs.version.outputs.any == 'true'
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.version.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -60,16 +81,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: apps/${{ matrix.app }}/src-tauri
       - run: npm ci
       - run: npm test
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v${{ needs.version.outputs.version }}
-          releaseName: Flächenrechner v${{ needs.version.outputs.version }}
-          releaseBody: Windows-Installer (.exe / .msi) und Web-Version (flaechenrechner-web.zip).
+          projectPath: apps/${{ matrix.app }}
+          tauriScript: npx tauri
+          tagName: ${{ matrix.tag }}
+          releaseName: ${{ matrix.name }} v${{ matrix.version }}
+          releaseBody: Windows-Installer (.exe / .msi) und Web-Version (${{ matrix.web }}).
           releaseDraft: false
           prerelease: false
       - name: Web-Version anhängen
@@ -77,5 +100,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd dist && 7z a -tzip ../flaechenrechner-web.zip . >/dev/null && cd ..
-          gh release upload "v${{ needs.version.outputs.version }}" flaechenrechner-web.zip --clobber
+          cd "apps/${{ matrix.app }}/dist" && 7z a -tzip "$GITHUB_WORKSPACE/${{ matrix.web }}" . >/dev/null && cd "$GITHUB_WORKSPACE"
+          gh release upload "${{ matrix.tag }}" "${{ matrix.web }}" --clobber

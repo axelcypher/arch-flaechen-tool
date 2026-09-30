@@ -1,0 +1,566 @@
+/* Flächenrechner: Zeichenfläche, Flächenaufstellung, Ansichten, Dach (Grund-Styles: @core/ui/base.css) */
+
+/* ---------- Zeichenfläche ---------- */
+
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvas-bg {
+  fill: var(--canvas);
+}
+
+.grid-minor {
+  stroke: #eceae4;
+  stroke-width: 1;
+  fill: none;
+}
+
+.grid-major {
+  stroke: #d9d6cc;
+  stroke-width: 1;
+  fill: none;
+}
+
+.ghost {
+  fill: none;
+  stroke: #9aa0a6;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+.shape-label {
+  font-size: 12px;
+  fill: #1f2328;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  font-variant-numeric: tabular-nums;
+}
+
+.shape-label-title {
+  font-weight: 600;
+}
+
+.dim-label {
+  font-size: 11px;
+  fill: #b35900;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure-label {
+  font-size: 13px;
+  font-weight: 600;
+  fill: #7a2ed6;
+}
+
+.measure-line {
+  stroke: #7a2ed6;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+}
+
+.vertex-handle {
+  fill: #fff;
+  stroke: var(--sel);
+  stroke-width: 2;
+  cursor: grab;
+}
+
+.vertex-handle:hover {
+  fill: var(--sel);
+}
+
+.mid-handle {
+  fill: #fff;
+  stroke: var(--sel);
+  stroke-width: 1;
+  opacity: 0.7;
+  cursor: copy;
+}
+
+.mid-handle:hover {
+  opacity: 1;
+  fill: #ffe2c7;
+}
+
+.draft {
+  fill: none;
+  stroke: var(--sel);
+  stroke-width: 1.5;
+}
+
+.draft-fill {
+  fill: rgba(255, 122, 0, 0.1);
+  stroke: none;
+}
+
+.draft.draft-fill {
+  stroke: var(--sel);
+}
+
+.draft-point {
+  fill: var(--sel);
+}
+
+.draft-start {
+  fill: #fff;
+  stroke: var(--sel);
+  stroke-width: 2;
+}
+
+.snap-marker {
+  fill: none;
+  stroke: #d6005c;
+  stroke-width: 1.5;
+}
+
+.snap-cross {
+  stroke: #444;
+  stroke-width: 1;
+}
+
+.hud {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  right: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.hud > span {
+  align-self: flex-start;
+  background: var(--overlay-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.hud-coords {
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-coords em {
+  font-style: normal;
+  color: var(--muted);
+}
+
+.hud-input {
+  font-weight: 600;
+  color: var(--sel);
+}
+
+.hud-hint {
+  color: var(--muted);
+}
+
+.canvas-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--overlay-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 4px 3px 8px;
+  font-size: 12px;
+}
+
+.scalebar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.scalebar-bar {
+  height: 6px;
+  border: 1px solid #333;
+  border-top: none;
+  background: linear-gradient(90deg, #333 50%, #fff 50%);
+}
+
+.overlay-dialog {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.overlay-dialog form {
+  background: var(--panel);
+  padding: 16px 20px;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  width: 320px;
+}
+
+.overlay-dialog h3 {
+  margin: 0 0 8px;
+}
+
+.overlay-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ---------- Bericht ---------- */
+
+.report-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  overflow: auto;
+  padding: 24px;
+  z-index: 10;
+}
+
+.report {
+  background: #fff;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 36px;
+  border-radius: 6px;
+  position: relative;
+}
+
+.report-actions {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.report-header {
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+
+.report-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.report-meta {
+  color: var(--muted);
+}
+
+.report h2 {
+  font-size: 15px;
+  margin: 22px 0 8px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.report-table.narrow {
+  width: auto;
+  min-width: 50%;
+}
+
+.report-table th {
+  text-align: left;
+  border-bottom: 1px solid var(--text);
+  padding: 4px 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.report-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.report-table td.strong {
+  font-weight: 600;
+}
+
+.report-table tr.sum td {
+  font-weight: 700;
+  border-top: 1.5px solid var(--text);
+  border-bottom: none;
+}
+
+.report-table td.formula {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.report-table tr.subtotal td {
+  font-weight: 600;
+  border-bottom: 1px solid #9aa0a6;
+}
+
+.report-note {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.report-actions {
+  align-items: center;
+}
+
+.report-keyfigures {
+  color: var(--muted);
+  margin: -4px 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-figure {
+  margin: 0 0 12px;
+}
+
+.plan-svg {
+  width: 100%;
+  max-height: 150mm;
+  display: block;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.plan-label {
+  fill: #1f2328;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.06em;
+  stroke-linejoin: round;
+}
+
+.plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.plan-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  opacity: 0.7;
+  border: 1px solid #555;
+}
+
+.plan-legend i.legend-bgf {
+  background: rgba(42, 91, 215, 0.08);
+  border: 1.5px solid #2a5bd7;
+}
+
+.toggle.block {
+  display: flex;
+  margin: 5px 0;
+}
+
+.inline-num {
+  display: inline-block;
+  width: 64px;
+  margin: 0 4px;
+}
+
+.ifc-storeys,
+.ifc-report {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.ifc-report li {
+  margin: 3px 0;
+}
+
+.modal hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+/* ---------- Ansichten ---------- */
+
+.view-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.view-pane.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.view-switch {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.view-switch button {
+  border-radius: 0;
+}
+
+.view-switch button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.view-switch button:last-child {
+  border-radius: 0 4px 4px 0;
+  margin-left: -1px;
+}
+
+.view-loading {
+  padding: 60px 20px;
+}
+
+.view3d {
+  position: absolute;
+  inset: 0;
+}
+
+.view3d-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.view3d-canvas canvas {
+  display: block;
+}
+
+.view3d-legend {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: var(--overlay-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  max-width: 300px;
+}
+
+.view3d-legend table {
+  border-collapse: collapse;
+  margin: 4px 0;
+  width: 100%;
+}
+
+.view3d-legend td {
+  padding: 1px 6px 1px 0;
+}
+
+.view3d-legend tr.active td {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.view3d-legend tr.sum td {
+  border-top: 1px solid var(--text);
+  font-weight: 700;
+}
+
+.legend-items {
+  display: flex;
+  gap: 10px;
+}
+
+.legend-items i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  opacity: 0.6;
+  vertical-align: -1px;
+}
+
+/* ---------- Dach ---------- */
+
+.roof-editor {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 2px;
+}
+
+.roof-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.roof-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 2px;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+
+.roof-choice.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.roof-icon {
+  width: 100%;
+  height: 34px;
+}
+
+.roof-ifc {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+}

@@ -1,0 +1,30 @@
+[package]
+name = "grz-nachweis"
+version = "0.1.0"
+description = "GRZ/GFZ-Nachweis nach BauNVO und BauO NRW"
+authors = ["Tobias Pendzialek"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "grz_nachweis_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-log = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

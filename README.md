@@ -47,6 +47,8 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
   Maßstabsleiste, Legende, optional mit Hintergrundplan) und Raumliste je Geschoss
 - **Excel-Export** (.xlsx) im Standardlayout oder mit **eigener Vorlage** – siehe [docs/excel-vorlagen.md](docs/excel-vorlagen.md)
 - **CSV-Export** (Excel, Dezimalkomma)
+- **GRZ/GFZ-Nachweis** als eigene App im selben Repository (`apps/grz`), die dieselbe Projektdatei öffnet –
+  siehe [docs/grz-gfz.md](docs/grz-gfz.md)
 - **Projektdaten** (Projektcode, Adresse, Grundstück mit Gemarkung/Flur/Flurstück, Bauherr mit beliebig vielen
   E-Mail-Adressen und Telefonnummern) im Dialog; als Platzhalter für Excel-Vorlagen (`{{bauherr.name}}` …)
 - Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)
@@ -68,42 +70,54 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 | `Strg+Z` / `Strg+Y` | Rückgängig / Wiederholen |
 | Mausrad / mittlere Maustaste / `Leertaste`+Ziehen | Zoomen / Verschieben |
 
-## Architektur
+## Aufbau des Repositorys
+
+Ein Repository mit npm-Workspaces, zwei Apps und einem gemeinsamen Unterbau:
 
 ```
-src/
-  core/        reine Fachlogik (TypeScript, ohne UI/Plattform) – Geometrie, DIN 277, WoFlV, Raumerkennung,
-               DXF-Import, Excel-Platzhalter, Export, Dateiformat
-  store/       Anwendungszustand (zustand) inkl. Undo/Redo und Autosave
-  components/  React-Oberfläche (SVG-Zeichenfläche, Seitenleisten, Bericht)
-  platform/    Browser-/Plattform-APIs: Speichern/Öffnen (Tauri-Dialog bzw. Download), PDF-Rendering (pdf.js),
-               Pixelmasken für die Raumerkennung, Excel (ExcelJS)
-src-tauri/     Tauri-v2-Hülle (Rust): Fenster + nativer Speichern-Dialog
+packages/core/       gemeinsamer Unterbau (TypeScript-Quelltext, in den Apps als @core/… eingebunden)
+  src/               Geometrie, Projektformat (.oap/.akhp), IFC-Import, Dachformen und Gauben, DIN-277-
+                     Berechnung, Lageplan-Flächen
+  src/platform/      Speichern/Öffnen (Tauri-Dialog bzw. Download), web-ifc, Protokoll, Farbschema
+  src/ui/            Titelleiste, Protokoll-Fenster, Eingabefelder, Grund-Styles (base.css)
+  tauri/commands.rs  gemeinsame Tauri-Befehle, per include! in beide Tauri-Hüllen eingebunden
+apps/flaechenrechner/  Flächenrechner (dieses Tool): Zeichenfläche, Bericht, Excel, DXF/PDF, 3D
+apps/grz/              GRZ/GFZ-Nachweis – siehe docs/grz-gfz.md
 ```
+
+Jede App hat ihre eigene Tauri-Hülle (`apps/<app>/src-tauri`), eigenen Installer und eigene Releases.
+Beide öffnen dieselbe Projektdatei (`.oap`/`.akhp`): Der Flächenrechner liefert Gebäude, Geschosse und
+Flächen, der GRZ-Nachweis pflegt Lageplan und Festsetzungen. Was die eine App nicht kennt, bewahrt sie
+beim Speichern.
 
 Die gesamte Berechnung läuft im Frontend. Tauri liefert nur Fenster und nativen Dateidialog; ohne Tauri
-fällt `src/platform/files.ts` automatisch auf Browser-Mechanismen zurück. Damit ist der Web-Build
-(`npm run build` → `dist/`) ohne Änderungen als statische Webanwendung einsetzbar.
+fällt `packages/core/src/platform/files.ts` automatisch auf Browser-Mechanismen zurück. Damit ist jeder
+Web-Build (`apps/<app>/dist/`) ohne Änderungen als statische Webanwendung einsetzbar.
 
 ## Entwicklung
 
-Voraussetzungen: Node.js ≥ 20; für die Desktop-App zusätzlich Rust (stable) und unter Windows
+Voraussetzungen: Node.js ≥ 20; für die Desktop-Apps zusätzlich Rust (stable) und unter Windows
 die WebView2-Runtime (in Windows 10/11 enthalten) sowie die MSVC-Build-Tools.
 
 ```bash
-npm install
-npm run dev          # Web-Version unter http://localhost:1420
-npm test             # Unit-Tests der Rechenlogik (vitest)
-npm run build        # statischer Web-Build nach dist/
+npm install              # alle Workspaces
+npm run dev              # Flächenrechner unter http://localhost:1420
+npm run dev:grz          # GRZ-Nachweis unter http://localhost:1430
+npm test                 # alle Tests (Unterbau und Apps, vitest)
+npm run typecheck        # TypeScript für alle Workspaces
+npm run build            # Web-Builds beider Apps nach apps/<app>/dist/
 
-npm run tauri:dev    # Desktop-App im Entwicklungsmodus
-npm run tauri:build  # Windows-Installer (NSIS .exe und .msi) unter src-tauri/target/release/bundle/
+npm run tauri:dev        # Flächenrechner als Desktop-App
+npm run tauri:dev:grz    # GRZ-Nachweis als Desktop-App
+npm run tauri:build -w flaechenrechner   # Windows-Installer unter apps/<app>/src-tauri/target/release/bundle/
 ```
 
-Der Workflow **Build & Release** (GitHub Actions) baut die Windows-Installer und veröffentlicht ein
-GitHub-Release `v<version>` (mit Web-Version als ZIP), sobald die Version auf `main` erhöht wird. Die
-Version steht in `package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` und muss überall
-gleich sein. Manuell gestartet wird die aktuelle Version (neu) gebaut.
+Der Workflow **Build & Release** (GitHub Actions) baut je App die Windows-Installer und veröffentlicht ein
+GitHub-Release (mit Web-Version als ZIP), sobald die Version der App auf `main` erhöht wird:
+Flächenrechner als `v<version>`, GRZ-Nachweis als `grz-v<version>`. Die Version steht je App in
+`package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` und muss dort überall gleich sein.
+Manuell gestartet wird die gewählte App in ihrer aktuellen Version (neu) gebaut. Die CI prüft zusätzlich
+beide Tauri-Hüllen mit `cargo check`.
 
 ## Hinweise zur Normanwendung
 

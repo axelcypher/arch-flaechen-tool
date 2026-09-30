@@ -158,8 +158,8 @@ Trauf- und Walmseiten, Satteldach mit Satteldach- und Flachdachgaube).
 
 | Datei | Inhalt |
 |---|---|
-| `src/core/roof.ts` | Dachformen, Dachebenen, exakte Volumenberechnung, 3D-Körper |
-| `src/core/gaube.ts` | Gauben: Maße, Formeln, 3D-Körper |
-| `src/core/rechenweg.ts` | Rechenweg (Teilkörper) und Körper mit geschlossenen Formeln (`koerper`) |
-| `src/core/roofFit.ts` | Erkennung von Dachform und Gauben aus dem Modell |
-| `src/core/ifcImport.ts` | IFC-Import, ruft die Erkennung auf |
+| `packages/core/src/roof.ts` | Dachformen, Dachebenen, exakte Volumenberechnung, 3D-Körper |
+| `packages/core/src/gaube.ts` | Gauben: Maße, Formeln, 3D-Körper |
+| `packages/core/src/rechenweg.ts` | Rechenweg (Teilkörper) und Körper mit geschlossenen Formeln (`koerper`) |
+| `packages/core/src/roofFit.ts` | Erkennung von Dachform und Gauben aus dem Modell |
+| `packages/core/src/ifcImport.ts` | IFC-Import, ruft die Erkennung auf |
