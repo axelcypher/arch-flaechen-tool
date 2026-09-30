@@ -67,7 +67,11 @@ mittlere Maustaste oder Alt+Ziehen verschiebt, „Einpassen“ zeigt alles.
   Geschosshöhen nicht. Das gilt auch beim IFC-Import im Flächenrechner.
 - Seine Bauteile (Decken, Beläge, Zonen, Objekte, Wände) und das IFC-Gelände (`IfcSite`, z. B. eine
   Garageneinfahrt aus dem Gelände-Werkzeug) werden Lageplan-Flächen. Nutzung und Versiegelung werden aus dem Namen
-  vorgeschlagen (z. B. „Zufahrt Rasengitter“ → Zufahrt, teilversiegelt), die Höhe der Oberseite wird übernommen.
+  vorgeschlagen (z. B. „Zufahrt Rasengitter“ → Zufahrt, teilversiegelt; ausdrückliche Angaben wie
+  „teilversiegelt“ gehen vor), die Höhe der Oberseite wird übernommen.
+- **Geländeelemente** (`IfcGeographicElement`) werden immer Lageplan-Flächen, egal in welchem Geschoss sie im
+  IFC stehen. Archicad ordnet sie beim Export nach ihrer Höhe zu (meist dem UG), nicht dem Geschoss „Lageplan“.
+  Sie zählen nie zum Gebäude.
 - Flächen ohne Verbindung zum Gebäude – auch nicht über andere Flächen – werden als Nachbargrundstück markiert.
 
 ### Grundstück und Gelände

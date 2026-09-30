@@ -263,4 +263,28 @@ describe('IFC: Lageplan-Geschoss', () => {
     expect(byName('Zufahrt Rasengitter').nachbar).toBeFalsy();
     expect(r.report.some((z) => z.includes('Lageplan: 4 Flächen übernommen') && z.includes('Nachbargrundstück'))).toBe(true);
   });
+
+  it('übernimmt Geländeelemente (IfcGeographicElement) auch aus dem UG – einzeln, mit eigenem Namen', () => {
+    const x = mitLageplan();
+    // Archicad: Freiflächen als IfcGeographicElement, nach der Höhe dem UG zugeordnet
+    x.elements.push(
+      { ...part('IFCGEOGRAPHICELEMENT', 1, box(0, -6, 6, 0, -0.3, -0.1)), name: 'Pflaster vollversiegelt' },
+      { ...part('IFCGEOGRAPHICELEMENT', 1, box(6, -6, 13, 0, -0.3, -0.1)), name: 'Schotterrasen teilversiegelt' },
+      { ...part('IFCGEOGRAPHICELEMENT', 1, box(-4, -6, 0, 0, -0.3, -0.1)), name: 'Rasen' },
+    );
+    const r = buildFromIfc(x, { rooms: false, outlines: true, roof: false, wohnflaeche: false });
+    const f = r.lageplan!.flaechen;
+    const byName = (n: string) => f.find((s) => s.name === n)!;
+    // aneinandergrenzend, aber getrennt übernommen
+    expect(byName('Pflaster vollversiegelt')).toMatchObject({ versiegelung: 'voll' });
+    expect(byName('Schotterrasen teilversiegelt')).toMatchObject({ versiegelung: 'teil' });
+    expect(byName('Rasen')).toMatchObject({ versiegelung: 'gruen', nutzung: 'garten' });
+    expect(polygonArea(byName('Pflaster vollversiegelt').points)).toBeCloseTo(36, 3);
+    expect(f).toHaveLength(7);
+    expect(r.report.some((z) => z.includes('3 Geländeelemente aus anderen Geschossen'))).toBe(true);
+    // das UG bleibt, wie es war: Umriss nur aus den Wänden
+    const ug = r.storeys[0].shapes.filter((s) => s.kind === 'outline');
+    expect(ug).toHaveLength(1);
+    expect(polygonArea(ug[0].points)).toBeCloseTo(80, 1);
+  });
 });

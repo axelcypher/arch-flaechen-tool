@@ -35,6 +35,12 @@ Geschosshöhe) – egal, wo es im IFC einsortiert ist. Seine Bauteile und das IF
 Lageplan-Flächen in die Projektdatei übernommen (Nutzung und Versiegelung aus dem Namen, Höhe der
 Oberseite) und im GRZ-Nachweis ausgewertet: [GRZ, GFZ und Vollgeschosse](grz-gfz.md).
 
+**Freiflächen getrennt exportieren:** Als „Gelände“ klassifizierte Freiflächen legt der IFC-Übersetzer alle
+zusammen in den einen Körper des `IfcSite` – Namen und Versiegelung je Fläche gehen dabei verloren. Abhilfe:
+ein Export-Übersetzer, der Freiflächen als `IfcGeographicElement` exportiert. Diese Elemente landen im IFC
+nach ihrer Höhe in einem Gebäudegeschoss (meist dem UG); der Import erkennt sie trotzdem als Lageplan-Flächen
+– jede einzeln mit ihrem Namen – und lässt sie aus dem Gebäude heraus.
+
 ## BGF und BRI bei Dachgeschossen
 
 Die **BGF** wird je Grundrissebene (Geschoss) auf Fußbodenhöhe ermittelt. Ein Geschoss ohne Wände

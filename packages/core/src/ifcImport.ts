@@ -61,6 +61,13 @@ const isOutlinePart = (e: IfcMeshPart) => OUTLINE_TYPES.has(e.type) || (CURTAIN_
 /** Geschoss, in dem der Lageplan gezeichnet ist (Archicad: eigenes Geschoss, meist auf Höhe des UG) */
 export const LAGEPLAN_NAME = /lageplan/i;
 
+/**
+ * Gelände und Geländeelemente gehören immer zum Lageplan, egal in welchem Geschoss sie liegen: Archicad ordnet
+ * Freiflächen, die als IfcGeographicElement exportiert werden, nach ihrer Höhe zu (z. B. dem UG), nicht nach dem
+ * Geschoss „Lageplan“, auf dem sie gezeichnet sind.
+ */
+export const istGelaendeElement = (e: { type: string }) => e.type === 'IFCSITE' || e.type === 'IFCGEOGRAPHICELEMENT';
+
 export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResult {
   const report: string[] = [];
   // Das Lageplan-Geschoss ist kein Gebäudegeschoss – egal, wo es im IFC einsortiert ist
@@ -239,16 +246,20 @@ export function buildFromIfc(x: IfcExtract, o: IfcImportOptions): IfcImportResul
 /* ---------- Lageplan ---------- */
 
 /**
- * Flächen des Lageplans: Bauteile und Zonen im Geschoss „Lageplan“ sowie das IFC-Gelände (IfcSite).
+ * Flächen des Lageplans: Bauteile und Zonen im Geschoss „Lageplan“ sowie Gelände (IfcSite) und
+ * Geländeelemente (IfcGeographicElement) aus allen Geschossen.
  * Nutzung und Versiegelung werden aus dem Namen vorgeschlagen, die Höhe der Oberseite übernommen;
  * Flächen ohne Verbindung zum Gebäude (auch über andere Flächen) gelten als Nachbargrundstück.
  */
 function lageplanAusIfc(x: IfcExtract, lageplanIdx: Set<number>, storeys: Storey[], report: string[]): Lageplan | undefined {
   const quellen: { name: string; text: string; tris: ArrayLike<number> }[] = [];
+  let ausAnderenGeschossen = 0;
   for (const e of x.elements) {
-    if (!(lageplanIdx.has(e.storey) || e.type === 'IFCSITE')) continue;
+    const gelaende = istGelaendeElement(e);
+    if (!(lageplanIdx.has(e.storey) || gelaende)) continue;
     if (e.type.startsWith('IFCFURNISHING') || e.type === 'IFCOPENINGELEMENT') continue;
-    quellen.push({ name: e.name || e.type, text: `${e.name} ${e.predefinedType} ${e.type === 'IFCSITE' ? '' : e.type}`, tris: e.tris });
+    if (gelaende && e.storey >= 0 && !lageplanIdx.has(e.storey)) ausAnderenGeschossen++;
+    quellen.push({ name: e.name || (gelaende ? 'Gelände' : e.type), text: `${e.name} ${e.predefinedType} ${gelaende ? '' : e.type}`, tris: e.tris });
   }
   for (const sp of x.spaces) {
     if (!lageplanIdx.has(sp.storey)) continue;
@@ -293,7 +304,7 @@ function lageplanAusIfc(x: IfcExtract, lageplanIdx: Set<number>, storeys: Storey
     });
   }
   report.push(
-    `Lageplan: ${flaechen.length} Flächen übernommen${nachbarn ? `, davon ${nachbarn} ohne Verbindung zum Gebäude als Nachbargrundstück markiert` : ''} – für den GRZ/GFZ-Nachweis (Nutzung und Versiegelung aus den Namen vorgeschlagen).`,
+    `Lageplan: ${flaechen.length} Flächen übernommen${nachbarn ? `, davon ${nachbarn} ohne Verbindung zum Gebäude als Nachbargrundstück markiert` : ''}${ausAnderenGeschossen ? `, ${ausAnderenGeschossen} Geländeelemente aus anderen Geschossen zugeordnet` : ''} – für den GRZ/GFZ-Nachweis (Nutzung und Versiegelung aus den Namen vorgeschlagen).`,
   );
   return { flaechen };
 }
@@ -790,7 +801,7 @@ const SECTION_LAYERS: { name: string; color: string; visible: boolean; match: (e
 export function sectionPlan(elements: IfcMeshPart[], cutZ: number, name: string): VectorBackground | null {
   const segsByLayer = SECTION_LAYERS.map(() => [] as number[]);
   for (const e of elements) {
-    if (e.type === 'IFCSITE') continue;
+    if (istGelaendeElement(e)) continue;
     const li = SECTION_LAYERS.findIndex((l) => l.match(e));
     const out = segsByLayer[li];
     const t = e.tris;

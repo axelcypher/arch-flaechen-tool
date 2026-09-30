@@ -38,7 +38,11 @@ const NUTZUNG_KEYWORDS: [RegExp, LageplanNutzung][] = [
 ];
 
 const VERSIEGELUNG_KEYWORDS: [RegExp, Versiegelung][] = [
-  [/grün|gruen|rasen(?!gitter)|garten|beet|wiese|pflanz|hecke/i, 'gruen'],
+  // ausdrückliche Angaben zuerst („Schotterrasen teilversiegelt“)
+  [/teil-?\s*versiegel/i, 'teil'],
+  [/voll-?\s*versiegel/i, 'voll'],
+  [/unversiegel|grünfläche|gruenflaeche/i, 'gruen'],
+  [/grün|gruen|(?<!schotter)rasen(?!gitter)|garten|beet|wiese|pflanz|hecke/i, 'gruen'],
   [/teil|rasengitter|rasenfuge|schotter|kies|splitt|öko|oeko|drän|draen|wassergebunden/i, 'teil'],
   [/voll|asphalt|beton|pflaster|platten|versiegelt/i, 'voll'],
 ];
