@@ -121,7 +121,7 @@ describe('GRZ-Nachweis', () => {
     expect(host.textContent).toContain('Muster-Vorlage herunterladen');
   });
 
-  it('verschiebt, ergänzt und löscht Ecken einer Fläche', () => {
+  it('Punkte wie im Flächenrechner: ziehen, über ◇ einfügen, per Rechtsklick löschen; Fläche verschieben', () => {
     useGrz.getState().load(projekt());
     const host = render(GrzGfzView);
     const id = useGrz.getState().project.lageplan!.flaechen[0].id;
@@ -130,26 +130,33 @@ describe('GRZ-Nachweis', () => {
     const punkte = () => useGrz.getState().project.lageplan!.flaechen[0].points;
     const vorher = punkte().map((p) => ({ ...p }));
     // je Ereignis ein eigenes act(), damit der Zustand dazwischen gerendert wird
-    const ziehe = (el: Element) => {
+    const ziehe = (el: Element, x = 50, y = 50) => {
       act(() => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })));
-      act(() => svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 50, clientY: 50 })));
-      act(() => svg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 50, clientY: 50 })));
+      act(() => svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x, clientY: y })));
+      act(() => svg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: x, clientY: y })));
     };
-    // Ecke ziehen: eine Ecke ändert sich, die Zahl bleibt
-    ziehe(host.querySelectorAll('.lp-ecke')[2]);
+    // Punkt ziehen: ein Punkt ändert sich, die Zahl bleibt
+    ziehe(host.querySelectorAll('.vertex-handle')[2]);
     expect(punkte()).toHaveLength(4);
     expect(punkte()[2]).not.toEqual(vorher[2]);
     expect(punkte()[0]).toEqual(vorher[0]);
     act(() => useGrz.getState().undo());
     expect(punkte()).toEqual(vorher);
-    // Kantenmitte ziehen fügt eine Ecke ein
-    ziehe(host.querySelectorAll('.lp-mitte')[0]);
+    // ◇ ohne Bewegung fügt den Mittelpunkt ein
+    act(() => host.querySelectorAll('.mid-handle')[0].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })));
+    act(() => svg.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 5, clientY: 5 })));
     expect(punkte()).toHaveLength(5);
-    // Doppelklick löscht eine Ecke, aber nie unter drei
-    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(punkte()[1]).toEqual({ x: (vorher[0].x + vorher[1].x) / 2, y: (vorher[0].y + vorher[1].y) / 2 });
+    // Rechtsklick löscht einen Punkt, aber nie unter drei
+    const rechts = () => act(() => host.querySelectorAll('.vertex-handle')[1].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+    rechts();
     expect(punkte()).toHaveLength(4);
-    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
-    act(() => host.querySelectorAll('.lp-ecke')[1].dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    rechts();
+    rechts();
     expect(punkte()).toHaveLength(3);
+    // Mausrad zoomt, ohne dass die Seite scrollt
+    const rad = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 100 });
+    act(() => svg.dispatchEvent(rad));
+    expect(rad.defaultPrevented).toBe(true);
   });
 });

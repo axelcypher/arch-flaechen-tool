@@ -227,17 +227,10 @@ button.link:hover {
   background: var(--accent-soft);
 }
 
-.lp-ecke {
-  fill: var(--panel);
-  stroke: var(--sel);
-  cursor: move;
-}
-
-.lp-mitte {
-  fill: var(--sel);
-  fill-opacity: 0.35;
-  stroke: var(--sel);
-  cursor: copy;
+/* Griffe wie im Flächenrechner; der Lageplan zeichnet in Metern, Strichstärken daher in Bildschirmpixeln */
+.grz-skizze .vertex-handle,
+.grz-skizze .mid-handle {
+  vector-effect: non-scaling-stroke;
 }
 
 /* ---------- Druckbarer Nachweis ---------- */

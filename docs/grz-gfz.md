@@ -53,12 +53,12 @@ Geschosshöhe. Er besteht aus **Lageplan-Flächen** mit zwei Merkmalen:
 Flächen von **Nachbargrundstücken** (zur Darstellung, oft größer als ihr Flurstück) werden als „Nachbar“ markiert und
 zählen nirgends mit.
 
-Bedienung im Lageplan: Werkzeug „Polygon“ (Punkte setzen, ersten Punkt, Doppelklick oder Enter schließt,
-Rück löscht den letzten Punkt, Esc bricht ab) oder „Rechteck“ (zwei Ecken); Ecken von Gebäude und Flächen
-werden gefangen. „Auswahl“ wählt eine Fläche, Entf löscht sie. An der ausgewählten Fläche lassen sich die
-Ecken ziehen (mit Fang), das Quadrat in der Kantenmitte fügt beim Ziehen eine neue Ecke ein, ein Doppelklick
-auf eine Ecke löscht sie (mindestens drei bleiben). Jede Änderung ist ein Rückgängig-Schritt. Mausrad zoomt,
-mittlere Maustaste oder Alt+Ziehen verschiebt, „Einpassen“ zeigt alles.
+Bedienung im Lageplan – wie im Flächenrechner: Werkzeug „Polygon“ (P; Punkte setzen, Startpunkt, Doppelklick
+oder Enter schließt, Rück löscht den letzten Punkt, Esc bricht ab) oder „Rechteck“ (R; zwei Ecken); Ecken von
+Gebäude und Flächen werden gefangen. „Auswahl“ (V): Klicken wählt eine Fläche, Ziehen verschiebt sie, Punkte
+ziehen ändert sie, ◇ in der Kantenmitte ziehen fügt einen Punkt ein, Rechtsklick auf einen Punkt löscht ihn
+(mindestens drei bleiben), Entf/Rück löscht die Fläche. Mausrad zoomt (nur den Plan), mittlere Maustaste,
+Leertaste + Ziehen oder Ziehen auf freier Fläche verschiebt die Ansicht, „Einpassen“ (F) zeigt alles.
 
 ### IFC-Import
 
