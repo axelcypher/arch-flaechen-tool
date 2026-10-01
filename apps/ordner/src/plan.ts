@@ -98,6 +98,15 @@ export function planen(stamm: Stammdaten, struktur: Struktur, vorlagen: Vorlage[
     else ausgeschlossen.push(pfad.toLowerCase());
   }
   if (ausgeschlossen.length) hinweise.push(`${ausgeschlossen.length} Ordner gehören zu nicht beauftragten Leistungsphasen und werden nicht angelegt.`);
+  // Ein übergeordneter Ordner entfällt mit, wenn die Struktur darunter nur ausgeschlossene Ordner kennt
+  // (z. B. „08 Bauleitung“, wenn alle Unterordner an LPh 8 hängen) – sonst kämen Vorlagen darin trotzdem an.
+  for (const a of [...ausgeschlossen]) {
+    const teile = a.split('/');
+    for (let i = 1; i < teile.length; i++) {
+      const eltern = teile.slice(0, i).join('/');
+      if (!schritte.has(eltern) && !ausgeschlossen.includes(eltern)) ausgeschlossen.push(eltern);
+    }
+  }
 
   const ctx = platzhalter(s, ordner, date);
   const datei = (pfad: string, herkunft: Herkunft, daten: () => Promise<Uint8Array>, quelle?: string) => {

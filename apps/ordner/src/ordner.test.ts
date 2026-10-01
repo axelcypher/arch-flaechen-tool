@@ -195,6 +195,18 @@ describe('Plan und Anlegen', () => {
     expect(planen(stamm({ leistungsphasen: [] }), KLEIN, [], [], TAG).schritte.filter((s) => s.art === 'ordner')).toHaveLength(5);
   });
 
+  it('Vorlagen in einem Ordner, dessen Unterordner alle an nicht beauftragten Leistungsphasen hängen, bleiben weg', () => {
+    const vorlagen = [vorlage('08 Bauleitung/Bautagebuch.md', 'x'), vorlage('08 Bauleitung/Mängel/Liste.csv', 'x'), vorlage('02 Pläne/Planliste.csv', 'x')];
+    // Standardstruktur: „08 Bauleitung“ selbst steht nicht in der Liste, nur seine Unterordner (LPh 8)
+    const ohne = planen(stamm({ leistungsphasen: [1, 2, 3, 4] }), STANDARD, vorlagen, [], TAG);
+    expect(ohne.schritte.map((s) => s.pfad).filter((p) => p.startsWith('08'))).toEqual([]);
+    expect(ohne.schritte.map((s) => s.pfad)).toContain('02 Pläne/Planliste.csv');
+    expect(ohne.hinweise.join(' ')).toContain('2 Vorlagen liegen in Ordnern nicht beauftragter Leistungsphasen');
+    // „02 Pläne“ bleibt: dort gibt es weiterhin beauftragte Unterordner
+    const mit = planen(stamm({ leistungsphasen: [8] }), STANDARD, vorlagen, [], TAG);
+    expect(mit.schritte.map((s) => s.pfad).filter((p) => p.startsWith('08'))).toEqual(['08 Bauleitung', '08 Bauleitung/Bautagebuch.md', '08 Bauleitung/Mängel', '08 Bauleitung/Mängel/Liste.csv', '08 Bauleitung/Rechnungen']);
+  });
+
   it('fehlende Angaben verhindern das Anlegen', async () => {
     const plan = planen(stamm({ nummer: ' ', kurzname: '' }), KLEIN, [], [], TAG);
     expect(plan.fehler).toEqual(['Die Projektnummer fehlt.', 'Der Kurzname fehlt.', 'Aus dem Schema für den Ordnernamen ergibt sich kein Name.']);
