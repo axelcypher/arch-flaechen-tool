@@ -1,0 +1,26 @@
+{
+  "name": "projektordner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Projektordner nach einheitlichem Schema anlegen und prüfen: Ordnerbaum, Vorlagen, Stammdaten (projekt.json)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p .",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@akh/core": "*",
+    "@tauri-apps/api": "^2.12.0",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": { "@core/*": ["../../packages/core/src/*"] }
+  },
+  "include": ["src", "vite.config.ts", "../../packages/core/src/globals.d.ts"]
+}

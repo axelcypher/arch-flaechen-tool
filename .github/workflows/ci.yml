@@ -26,6 +26,7 @@ jobs:
             apps/flaechenrechner/dist
             apps/grz/dist
             apps/kosten/dist
+            apps/ordner/dist
 
   tauri:
     name: Tauri-Hülle prüfen (${{ matrix.app }})
@@ -40,6 +41,8 @@ jobs:
             pkg: grz-nachweis
           - app: kosten
             pkg: kostenermittlung
+          - app: ordner
+            pkg: projektordner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -52,6 +52,9 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 - **Massen- und Kostenermittlung nach DIN 276** als eigene App (`apps/kosten`): Mengen aus dem Projekt mit
   Nachweis im Grundriss und im 3D-Modell, Kennwerte mit Bandbreite, Kennwertkatalog, Kostenstände – siehe
   [docs/kosten.md](docs/kosten.md)
+- **Projektordner** als eigene App (`apps/ordner`): Projektordner nach einheitlicher, konfigurierbarer Struktur
+  anlegen (Trockenlauf, Vorlagen mit Platzhaltern, `projekt.json`, leere Flächenrechner-Datei) und vorhandene
+  Ordner prüfen – siehe [docs/projektordner.md](docs/projektordner.md)
 - **Projektdaten** (Projektcode, Adresse, Grundstück mit Gemarkung/Flur/Flurstück, Bauherr mit beliebig vielen
   E-Mail-Adressen und Telefonnummern) im Dialog; als Platzhalter für Excel-Vorlagen (`{{bauherr.name}}` …)
 - Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)
@@ -75,7 +78,7 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 
 ## Aufbau des Repositorys
 
-Ein Repository mit npm-Workspaces, drei Apps und einem gemeinsamen Unterbau:
+Ein Repository mit npm-Workspaces, vier Apps und einem gemeinsamen Unterbau:
 
 ```
 packages/core/       gemeinsamer Unterbau (TypeScript-Quelltext, in den Apps als @core/… eingebunden)
@@ -88,6 +91,7 @@ packages/core/       gemeinsamer Unterbau (TypeScript-Quelltext, in den Apps als
 apps/flaechenrechner/  Flächenrechner (dieses Tool): Zeichenfläche, Bericht, Excel, DXF/PDF, 3D
 apps/grz/              GRZ/GFZ-Nachweis: Lageplan, Nachweis zum Drucken, Excel – siehe docs/grz-gfz.md
 apps/kosten/           Kostenermittlung nach DIN 276: Mengen, Kennwerte, Kostenstände, Druck, Excel – siehe docs/kosten.md
+apps/ordner/           Projektordner anlegen und prüfen: Struktur, Vorlagen, Stammdaten – siehe docs/projektordner.md
 ```
 
 Jede App hat ihre eigene Tauri-Hülle (`apps/<app>/src-tauri`), eigenen Installer und eigene Releases.
@@ -109,6 +113,7 @@ npm install              # alle Workspaces
 npm run dev              # Flächenrechner unter http://localhost:1420
 npm run dev:grz          # GRZ-Nachweis unter http://localhost:1430
 npm run dev:kosten       # Kostenermittlung unter http://localhost:1440
+npm run dev:ordner       # Projektordner unter http://localhost:1450
 npm test                 # alle Tests (Unterbau und Apps, vitest)
 npm run typecheck        # TypeScript für alle Workspaces
 npm run build            # Web-Builds aller Apps nach apps/<app>/dist/
@@ -116,12 +121,14 @@ npm run build            # Web-Builds aller Apps nach apps/<app>/dist/
 npm run tauri:dev        # Flächenrechner als Desktop-App
 npm run tauri:dev:grz    # GRZ-Nachweis als Desktop-App
 npm run tauri:dev:kosten # Kostenermittlung als Desktop-App
+npm run tauri:dev:ordner # Projektordner als Desktop-App
 npm run tauri:build -w flaechenrechner   # Windows-Installer unter apps/<app>/src-tauri/target/release/bundle/
 ```
 
 Der Workflow **Build & Release** (GitHub Actions) baut je App die Windows-Installer und veröffentlicht ein
 GitHub-Release (mit Web-Version als ZIP), sobald die Version der App auf `main` erhöht wird:
-Flächenrechner als `v<version>`, GRZ-Nachweis als `grz-v<version>`, Kostenermittlung als `kosten-v<version>`.
+Flächenrechner als `v<version>`, GRZ-Nachweis als `grz-v<version>`, Kostenermittlung als `kosten-v<version>`,
+Projektordner als `ordner-v<version>`.
 Die Version steht je App in
 `package.json`, `src-tauri/tauri.conf.json` und `src-tauri/Cargo.toml` und muss dort überall gleich sein.
 Manuell gestartet wird die gewählte App in ihrer aktuellen Version (neu) gebaut. Die CI prüft zusätzlich
