@@ -32,8 +32,33 @@ interface UpdateState {
 }
 
 let gefunden: Update | null = null;
+/** Jemand wartet auf das Ergebnis der laufenden Suche (von Hand gestartet) – dann wird es auch gemeldet */
+let laut = false;
+
+/** Zeitgrenzen: ohne sie bliebe die Suche hängen, wenn Proxy oder Firewall die Verbindung weder zulassen noch ablehnen */
+const FRIST_SUCHE = 20_000;
+const FRIST_LADEN = 10 * 60_000;
+
+export const RELEASE_SEITE = 'https://github.com/axelcypher/arch-flaechen-tool/releases';
 
 const meldung = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Bricht ab, wenn der Aufruf selbst nicht zurückkommt (die Zeitgrenze der Anfrage sollte vorher greifen) */
+function mitFrist<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`keine Antwort nach ${Math.round(ms / 1000)} s`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
 
 export const useUpdate = create<UpdateState>()((set, get) => ({
   status: 'aus',
@@ -41,23 +66,31 @@ export const useUpdate = create<UpdateState>()((set, get) => ({
 
   suchen: async (still = false) => {
     const { status } = get();
-    if (!isTauri() || status === 'sucht' || status === 'laedt' || status === 'installiert') return;
+    if (!isTauri() || status === 'laedt' || status === 'installiert') return;
+    if (status === 'sucht') {
+      // läuft schon (z. B. die stille Prüfung): eine Suche von Hand bekommt deren Ergebnis gemeldet
+      if (!still) laut = true;
+      return;
+    }
     // ein bereits gefundenes Update bleibt bei der stillen Prüfung stehen
     if (still && status === 'verfuegbar') return;
+    laut = !still;
     set({ status: 'sucht', fehler: undefined });
     try {
       const { check } = await import('@tauri-apps/plugin-updater');
-      gefunden = await check();
+      gefunden = await mitFrist(check({ timeout: FRIST_SUCHE }), FRIST_SUCHE + 10_000);
       if (gefunden) {
         log.info(`Update verfügbar: ${gefunden.version}`, { installiert: gefunden.currentVersion });
         set({ status: 'verfuegbar', version: gefunden.version, notizen: gefunden.body?.trim() || undefined });
       } else {
-        log.debug('Kein Update verfügbar');
-        set({ status: still ? 'aus' : 'aktuell', version: undefined, notizen: undefined });
+        log.info('Kein Update verfügbar');
+        set({ status: laut ? 'aktuell' : 'aus', version: undefined, notizen: undefined });
       }
     } catch (e) {
       log.warn('Suche nach Updates fehlgeschlagen', meldung(e));
-      set(still ? { status: 'aus' } : { status: 'fehler', fehler: meldung(e) });
+      set(laut ? { status: 'fehler', fehler: meldung(e) } : { status: 'aus' });
+    } finally {
+      laut = false;
     }
   },
 
@@ -65,10 +98,13 @@ export const useUpdate = create<UpdateState>()((set, get) => ({
     if (!gefunden || get().status !== 'verfuegbar') return;
     set({ status: 'laedt', geladen: 0, gesamt: undefined, fehler: undefined });
     try {
-      await gefunden.downloadAndInstall((ev) => {
-        if (ev.event === 'Started') set({ gesamt: ev.data.contentLength });
-        else if (ev.event === 'Progress') set({ geladen: get().geladen + ev.data.chunkLength });
-      });
+      await gefunden.downloadAndInstall(
+        (ev) => {
+          if (ev.event === 'Started') set({ gesamt: ev.data.contentLength });
+          else if (ev.event === 'Progress') set({ geladen: get().geladen + ev.data.chunkLength });
+        },
+        { timeout: FRIST_LADEN },
+      );
       log.info(`Update ${gefunden.version} installiert – Neustart`);
       set({ status: 'installiert' });
       // unter Windows beendet der Installer die Anwendung selbst und startet sie neu

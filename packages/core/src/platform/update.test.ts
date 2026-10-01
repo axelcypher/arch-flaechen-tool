@@ -61,6 +61,33 @@ describe('Updates', () => {
     expect(useUpdate.getState()).toMatchObject({ status: 'fehler', fehler: 'offline' });
   });
 
+  it('Suche von Hand während der stillen Prüfung: deren Ergebnis wird gemeldet', async () => {
+    let fertig!: (v: null) => void;
+    check.mockReturnValue(new Promise((r) => (fertig = r)));
+    const still = useUpdate.getState().suchen(true);
+    await Promise.resolve();
+    expect(useUpdate.getState().status).toBe('sucht');
+    await useUpdate.getState().suchen(); // kehrt sofort zurück, startet keine zweite Anfrage
+    fertig(null);
+    await still;
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(useUpdate.getState().status).toBe('aktuell');
+  });
+
+  it('Zeitgrenze: eine hängende Anfrage endet mit einer Meldung statt endloser Suche', async () => {
+    vi.useFakeTimers();
+    try {
+      check.mockReturnValue(new Promise(() => undefined));
+      const suche = useUpdate.getState().suchen();
+      await vi.advanceTimersByTimeAsync(31_000);
+      await suche;
+      expect(check).toHaveBeenCalledWith({ timeout: 20_000 });
+      expect(useUpdate.getState()).toMatchObject({ status: 'fehler', fehler: 'keine Antwort nach 30 s' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('lädt mit Fortschritt, installiert und startet neu', async () => {
     const schritte: [number, number | undefined][] = [];
     const laden = vi.fn(async (onEvent: (e: Fortschritt) => void) => {

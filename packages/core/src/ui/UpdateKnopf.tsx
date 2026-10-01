@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { starteUpdatePruefung, useUpdate } from '../platform/update';
+import { RELEASE_SEITE, starteUpdatePruefung, useUpdate } from '../platform/update';
 
 const mb = (bytes: number) => (bytes / 1024 / 1024).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -53,9 +53,14 @@ function UpdateDialog({ app, dirty, onClose }: { app: string; dirty: boolean; on
       <div className="modal">
         <h3>{app} aktualisieren</h3>
         {status === 'sucht' && <p>Suche nach Updates …</p>}
-        {(status === 'aktuell' || status === 'aus') && (
+        {status === 'aktuell' && (
           <p>
             Version <strong>{__APP_VERSION__}</strong> ist aktuell.
+          </p>
+        )}
+        {status === 'aus' && (
+          <p>
+            Installiert ist Version <strong>{__APP_VERSION__}</strong>.
           </p>
         )}
         {status === 'verfuegbar' && (
@@ -78,15 +83,17 @@ function UpdateDialog({ app, dirty, onClose }: { app: string; dirty: boolean; on
         )}
         {status === 'installiert' && <p>Version {version} ist installiert – die Anwendung wird neu gestartet …</p>}
         {status === 'fehler' && (
-          <p className="warning">
-            Das Update konnte nicht geladen werden: {fehler}
+          <p className="warning update-fehler">
+            Der Update-Server ist nicht erreichbar oder das Update ließ sich nicht laden: {fehler}
             <br />
-            Die Installer stehen auch auf der Release-Seite bereit.
+            In Firmennetzen verhindern das oft Proxy oder Firewall. Die Installer stehen auch auf der Release-Seite bereit:
+            <br />
+            <code>{RELEASE_SEITE}</code>
           </p>
         )}
         <div className="dialog-buttons">
           {!laeuft && <button onClick={onClose}>{status === 'verfuegbar' ? 'Später' : 'Schließen'}</button>}
-          {status === 'fehler' && <button onClick={() => void suchen()}>Erneut suchen</button>}
+          {(status === 'fehler' || status === 'aus') && <button onClick={() => void suchen()}>{status === 'fehler' ? 'Erneut suchen' : 'Nach Updates suchen'}</button>}
           {status === 'verfuegbar' && (
             <button className="primary" onClick={() => void installieren()}>
               Jetzt installieren
