@@ -6,6 +6,7 @@ name: Build & Release
 #
 #   Flächenrechner   apps/flaechenrechner   Tag v<version>
 #   GRZ-Nachweis     apps/grz               Tag grz-v<version>
+#   Kostenermittlung apps/kosten            Tag kosten-v<version>
 on:
   push:
     branches: [main]
@@ -18,7 +19,7 @@ on:
       app:
         description: App
         type: choice
-        options: [alle, flaechenrechner, grz]
+        options: [alle, flaechenrechner, grz, kosten]
         default: alle
 
 permissions:
@@ -43,7 +44,7 @@ jobs:
           WAHL: ${{ inputs.app }}
         run: |
           apps='[]'
-          for d in flaechenrechner grz; do
+          for d in flaechenrechner grz kosten; do
             v=$(node -p "require('./apps/$d/package.json').version")
             t=$(node -p "require('./apps/$d/src-tauri/tauri.conf.json').version")
             c=$(grep -m1 '^version' "apps/$d/src-tauri/Cargo.toml" | cut -d'"' -f2)
@@ -51,7 +52,11 @@ jobs:
               echo "::error::$d: Versionen uneinheitlich: package.json $v, tauri.conf.json $t, Cargo.toml $c"
               exit 1
             fi
-            if [ "$d" = "flaechenrechner" ]; then tag="v$v"; name="Flächenrechner"; web="flaechenrechner-web.zip"; else tag="$d-v$v"; name="GRZ-Nachweis"; web="grz-nachweis-web.zip"; fi
+            case "$d" in
+              flaechenrechner) tag="v$v"; name="Flächenrechner"; web="flaechenrechner-web.zip" ;;
+              grz) tag="$d-v$v"; name="GRZ-Nachweis"; web="grz-nachweis-web.zip" ;;
+              kosten) tag="$d-v$v"; name="Kostenermittlung"; web="kostenermittlung-web.zip" ;;
+            esac
             if [ "$EVENT" = "workflow_dispatch" ]; then
               if [ "$WAHL" != "alle" ] && [ "$WAHL" != "$d" ]; then continue; fi
             elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then

@@ -4,6 +4,10 @@ import type {
   DateiArt,
   Grundstueck,
   KontaktArt,
+  Kosten,
+  KostenBezug,
+  KostenPosition,
+  KostenStufe,
   LageplanFlaeche,
   LageplanNutzung,
   MassNutzung,
@@ -13,12 +17,13 @@ import type {
   ProjektDatei,
   RasterBackground,
   Shape,
+  Spanne,
   Storey,
   VectorBackground,
   Versiegelung,
   WoflKategorie,
 } from './model';
-import { anschriftAusText, createProject, newId } from './model';
+import { anschriftAusText, createProject, KOSTEN_BEZUEGE, KOSTEN_STUFEN, newId } from './model';
 import { NUTZUNGSGRUPPEN, WOFL_KATEGORIEN } from './norms';
 import type { Gaube, GaubenTyp } from './gaube';
 import type { Dach, DachTyp } from './roof';
@@ -74,6 +79,7 @@ export function parseProjectData(raw: unknown): Project {
   const flaechen = lpRoh.filter(isObj).map(normalizeFlaeche).filter((f): f is LageplanFlaeche => f !== null);
   if (flaechen.length || isObj(raw.lageplan)) project.lageplan = { flaechen };
   if (isObj(raw.massNutzung)) project.massNutzung = normalizeMassNutzung(raw.massNutzung);
+  if (isObj(raw.kosten)) project.kosten = normalizeKosten(raw.kosten);
   if (Array.isArray(raw.dateien)) {
     const dateien = raw.dateien.filter(isObj).map(normalizeDatei).filter((d): d is ProjektDatei => d !== null);
     if (dateien.length) project.dateien = dateien;
@@ -148,7 +154,61 @@ function normalizeMassNutzung(m: Record<string, unknown>): MassNutzung {
   return out;
 }
 
-const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage', 'vorlage-grz'];
+const STUFEN: KostenStufe[] = KOSTEN_STUFEN.map((s) => s.id);
+const zahl = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+const spanne = (v: unknown): Spanne => (Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === 'number' && Number.isFinite(x)) ? (v as Spanne) : [0, 0, 0]);
+
+function normalizeKosten(k: Record<string, unknown>): Kosten {
+  const positionen: KostenPosition[] = (Array.isArray(k.positionen) ? k.positionen : []).filter(isObj).map((p) => {
+    const pos: KostenPosition = {
+      id: str(p.id, newId('kp')),
+      kg: str(p.kg, ''),
+      bezeichnung: str(p.bezeichnung, ''),
+      bezug: KOSTEN_BEZUEGE.includes(p.bezug as KostenBezug) ? (p.bezug as KostenBezug) : 'pauschal',
+    };
+    for (const f of ['menge', 'von', 'mittel', 'bis'] as const) if (zahl(p[f]) !== undefined) pos[f] = zahl(p[f]);
+    for (const f of ['einheit', 'quelle', 'bemerkung'] as const) if (typeof p[f] === 'string' && p[f]) pos[f] = p[f] as string;
+    if (Array.isArray(p.basis)) pos.basis = p.basis.filter((x): x is string => typeof x === 'string');
+    if (p.aus === true) pos.aus = true;
+    return pos;
+  });
+  const out: Kosten = { positionen };
+  if (STUFEN.includes(k.stufe as KostenStufe)) out.stufe = k.stufe as KostenStufe;
+  if (typeof k.datum === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(k.datum)) out.datum = k.datum;
+  if (isObj(k.mengen)) {
+    const m: Kosten['mengen'] = {};
+    for (const b of KOSTEN_BEZUEGE) if (zahl(k.mengen[b]) !== undefined) m[b] = zahl(k.mengen[b]);
+    out.mengen = m;
+  }
+  for (const f of ['indexBasis', 'indexAktuell', 'regionalfaktor', 'mwst'] as const) if (zahl(k[f]) !== undefined) out[f] = zahl(k[f]);
+  if (k.kennwerteBrutto === true) out.kennwerteBrutto = true;
+  if (isObj(k.katalog) && typeof k.katalog.name === 'string') {
+    out.katalog = { name: k.katalog.name };
+    if (typeof k.katalog.quelle === 'string') out.katalog.quelle = k.katalog.quelle;
+    if (typeof k.katalog.stand === 'string') out.katalog.stand = k.katalog.stand;
+  }
+  if (Array.isArray(k.staende)) {
+    out.staende = k.staende.filter(isObj).map((s) => {
+      const summen: Record<string, Spanne> = {};
+      if (isObj(s.summen)) for (const [kg, v] of Object.entries(s.summen)) summen[kg] = spanne(v);
+      const mengen: Record<string, number> = {};
+      if (isObj(s.mengen)) for (const [b, v] of Object.entries(s.mengen)) if (zahl(v) !== undefined) mengen[b] = v as number;
+      return {
+        id: str(s.id, newId('ks')),
+        datum: str(s.datum, ''),
+        stufe: STUFEN.includes(s.stufe as KostenStufe) ? (s.stufe as KostenStufe) : 'schaetzung',
+        bemerkung: str(s.bemerkung, ''),
+        mengen,
+        summen,
+        gesamtNetto: spanne(s.gesamtNetto),
+        gesamtBrutto: spanne(s.gesamtBrutto),
+      };
+    });
+  }
+  return out;
+}
+
+const DATEI_ARTEN: DateiArt[] = ['ifc', 'dxf', 'pdf', 'vorlage', 'vorlage-grz', 'vorlage-kosten'];
 
 function normalizeDatei(d: Record<string, unknown>): ProjektDatei | null {
   if (!(d.daten instanceof Uint8Array) || !DATEI_ARTEN.includes(d.art as DateiArt)) return null;

@@ -1,0 +1,290 @@
+/* Kostenermittlung (Grund-Styles: @core/ui/base.css) */
+
+.ko-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+.ko-leer {
+  max-width: 640px;
+  margin: 24px auto 0;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.ko-bericht {
+  margin: 12px 12px 0;
+  padding: 10px 14px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.ko-bericht ul {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+
+.ko-view {
+  display: grid;
+  grid-template-columns: minmax(250px, 300px) minmax(480px, 1fr) minmax(360px, 440px);
+  gap: 12px;
+  padding: 12px;
+  align-items: start;
+}
+@media (max-width: 1400px) {
+  .ko-view {
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  }
+  /* schmal: Grundlagen und Mengen links über beide Zeilen, Übersicht unter den Positionen */
+  .ko-view > .ko-col:first-child {
+    grid-row: 1 / span 2;
+  }
+  .ko-uebersicht {
+    grid-column: 2;
+  }
+}
+.ko-col {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.ko-col h2 {
+  margin-top: 0;
+}
+.ko-col h2:not(:first-child) {
+  margin-top: 18px;
+}
+.ko-col h3 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+}
+.ko-col input[type='date'] {
+  font: inherit;
+  padding: 4px 6px;
+}
+.toggle.block {
+  display: flex;
+  margin: 2px 0 8px;
+  font-size: 12px;
+}
+
+.tbl-wrap {
+  overflow-x: auto;
+}
+.ko-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ko-table th,
+.ko-table td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.ko-table th {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.ko-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ko-table tr.sum td {
+  font-weight: 600;
+  border-top: 1.5px solid var(--text);
+}
+.ko-table tr.selected td {
+  background: var(--accent-soft);
+}
+.ko-table input,
+.ko-table select {
+  padding: 2px 5px;
+  font-size: 12px;
+}
+.ko-table td.ko-menge {
+  width: 96px;
+}
+.ko-table tr.festgelegt td:first-child strong {
+  color: var(--accent);
+}
+
+/* Positionen */
+.ko-pos {
+  min-width: 860px;
+}
+.ko-pos td.ko-kg {
+  width: 56px;
+  min-width: 56px;
+}
+.ko-pos td.ko-kw {
+  width: 88px;
+  min-width: 88px;
+}
+.ko-pos td:nth-child(3) {
+  width: 26%;
+  min-width: 170px;
+}
+.ko-basis input {
+  min-width: 80px;
+}
+.ko-pos select {
+  min-width: 96px;
+}
+.ko-pos tr.ko-gruppe td {
+  background: var(--bg);
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+.ko-pos tr.aus td {
+  opacity: 0.5;
+}
+.ko-pos tr.warn td:first-child {
+  box-shadow: inset 3px 0 0 var(--warn-border);
+}
+.ko-pos .warning {
+  display: inline-block;
+  padding: 0 5px;
+  margin-top: 2px;
+  white-space: normal;
+}
+.ko-basis {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Übersicht */
+.ko-table tr.ko-kg1 td {
+  font-weight: 600;
+}
+.ko-table tr.ko-kg2 td {
+  color: var(--muted);
+}
+.ko-table tr.ko-kg2 td:first-child {
+  padding-left: 16px;
+}
+.ko-table tr.ko-kg1 td:first-child,
+.ko-table tr.ko-kg2 td:first-child {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ko-table td.mehr {
+  color: var(--danger);
+}
+.ko-table td.weniger {
+  color: #1f8a4c;
+}
+.ko-hinweise {
+  padding-left: 18px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.ko-hinweise li {
+  margin-bottom: 4px;
+}
+.ko-stand-neu {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+button.link:hover {
+  text-decoration: underline;
+}
+
+/* Kennwertkatalog */
+.modal.modal-wide:has(.ko-katalog) {
+  width: 820px;
+}
+.ko-katalog {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.ko-katalog tbody tr {
+  cursor: pointer;
+}
+.ko-katalog thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+
+/* ---------- Druckbare Kostenermittlung ---------- */
+
+.ko-report .report-table td {
+  vertical-align: top;
+}
+.ko-report .report-table th.num {
+  text-align: right;
+}
+.ko-report .report-table tr.ko-kg2 td {
+  color: var(--muted);
+}
+.ko-report .report-table tr.ko-kg2 td.strong {
+  font-weight: 400;
+}
+.ko-report .report-table .report-note {
+  margin: 0;
+}
+.ko-report .report-keyfigures {
+  margin: 8px 0 0;
+}
+.ko-report-hinweise {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.ko-report-unterschrift {
+  display: flex;
+  gap: 48px;
+  margin-top: 36px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ko-report-unterschrift div {
+  flex: 1;
+  max-width: 260px;
+}
+.ko-report-unterschrift span {
+  display: block;
+  border-bottom: 1px solid #1f2328;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+  }
+  .ko-report h2 {
+    break-after: avoid;
+  }
+  .ko-report tr {
+    break-inside: avoid;
+  }
+}

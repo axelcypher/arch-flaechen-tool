@@ -1,0 +1,173 @@
+// @vitest-environment happy-dom
+import type { FunctionComponent } from 'react';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createProject } from '@core/model';
+import { App } from './App';
+import { KatalogDialog } from './components/KatalogDialog';
+import { KostenDruck } from './components/KostenDruck';
+import { leseKatalog, katalogSpeichern } from './katalog';
+import { useKosten } from './store';
+import { projekt, projektMitKosten } from './testdaten';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: ReturnType<typeof createRoot> | null = null;
+function render<P extends object>(el: FunctionComponent<P>, props?: P): HTMLElement {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  act(() => {
+    root = createRoot(host);
+    root.render(createElement(el, props));
+  });
+  return host;
+}
+afterEach(() => {
+  act(() => root?.unmount());
+  root = null;
+  document.body.innerHTML = '';
+  katalogSpeichern(null);
+});
+
+/** Eingabe wie von Hand: Wert setzen und das Feld verlassen (die Felder übernehmen bei Fokusverlust) */
+const eingabe = (el: HTMLInputElement, value: string) => {
+  act(() => {
+    el.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  act(() => el.blur());
+};
+const waehle = (el: HTMLSelectElement, value: string) =>
+  act(() => {
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+const knopf = (host: Element, text: string) => [...host.querySelectorAll('button')].find((b) => b.textContent?.trim().startsWith(text)) as HTMLButtonElement;
+const kosten = () => useKosten.getState().project.kosten!;
+
+describe('Kostenermittlung', () => {
+  it('zeigt ohne Projekt den Einstieg; Druck und Excel sind gesperrt', () => {
+    useKosten.getState().load(createProject());
+    const host = render(App);
+    expect(host.textContent).toContain('Projekt oder IFC öffnen');
+    expect(knopf(host, 'Kosten drucken').disabled).toBe(true);
+    expect(knopf(host, 'Excel').disabled).toBe(true);
+  });
+
+  it('zeigt Mengen aus dem Projekt, Positionen je Kostengruppe und die Übersicht', () => {
+    useKosten.getState().load(projektMitKosten());
+    const host = render(App);
+    const text = host.textContent ?? '';
+    expect(text).not.toContain('Projekt oder IFC öffnen');
+    expect(text).toContain('Kostenschätzung');
+    expect(text).toContain('1.642.500 €');
+    expect(text).toContain('1.954.575 €');
+    // abgeleitete BGF als Vorgabe im Mengenfeld
+    expect((host.querySelector('.ko-menge input') as HTMLInputElement).placeholder).toBe('540,00');
+    expect(host.querySelectorAll('.ko-pos tr.ko-gruppe')).toHaveLength(4);
+    expect(host.querySelectorAll('.ko-pos tbody tr:not(.ko-gruppe)')).toHaveLength(5);
+  });
+
+  it('Gliederung anlegen, Kennwert eintragen, Menge festlegen, Position ausschalten und löschen', () => {
+    useKosten.getState().load(projekt());
+    const host = render(App);
+    act(() => knopf(host, 'Gliederung 1. Ebene').click());
+    expect(kosten().positionen.map((p) => p.kg)).toEqual(['300', '400', '500', '700']);
+    expect(host.textContent).toContain('Kennwert fehlt');
+
+    // Kennwert „Mittel“ der KG 300
+    const zeile = () => host.querySelectorAll('.ko-pos tbody tr:not(.ko-gruppe)')[0];
+    eingabe(zeile().querySelectorAll('.ko-kw input')[1] as HTMLInputElement, '1800');
+    expect(kosten().positionen[0].mittel).toBe(1800);
+    expect(zeile().textContent).toContain('972.000 €');
+
+    // BGF von Hand festlegen und wieder freigeben
+    const bgf = () => host.querySelector('.ko-menge input') as HTMLInputElement;
+    eingabe(bgf(), '500');
+    expect(kosten().mengen).toEqual({ bgf: 500 });
+    expect(zeile().textContent).toContain('900.000 €');
+    eingabe(bgf(), '');
+    expect(kosten().mengen).toBeUndefined();
+
+    // Bezug umstellen: Prozent bekommt die übliche Grundlage
+    waehle(zeile().querySelector('select') as HTMLSelectElement, 'prozent');
+    expect(kosten().positionen[0]).toMatchObject({ bezug: 'prozent', basis: ['300', '400'] });
+    act(() => useKosten.getState().undo());
+
+    // ausschalten und löschen
+    act(() => (zeile().querySelector('input[type="checkbox"]') as HTMLInputElement).click());
+    expect(kosten().positionen[0].aus).toBe(true);
+    act(() => (zeile().querySelector('button.danger') as HTMLButtonElement).click());
+    expect(kosten().positionen.map((p) => p.kg)).toEqual(['400', '500', '700']);
+    act(() => useKosten.getState().undo());
+    expect(kosten().positionen).toHaveLength(4);
+  });
+
+  it('Stufe und Faktoren wirken auf die Übersicht; Stand festhalten und Vorher/Nachher', () => {
+    useKosten.getState().load(projektMitKosten());
+    const host = render(App);
+    waehle(host.querySelector('.ko-col select') as HTMLSelectElement, 'berechnung');
+    expect(kosten().stufe).toBe('berechnung');
+    expect(host.textContent).toContain('Kostenberechnung');
+
+    act(() => knopf(host, 'Stand festhalten').click());
+    expect(kosten().staende).toHaveLength(1);
+    expect(kosten().staende![0].gesamtNetto[1]).toBeCloseTo(1642500, 2);
+    expect(host.textContent).toContain('Vorher/Nachher');
+
+    eingabe(host.querySelector('.ko-menge input') as HTMLInputElement, '500');
+    const text = host.textContent ?? '';
+    expect(text).toContain('Geänderte Mengen: BGF 540,00 → 500,00 m²');
+    expect(text).toContain('-115.200 €');
+  });
+
+  it('druckbare Kostenermittlung mit Übersicht, Positionen, Mengen und Kostenständen', () => {
+    useKosten.getState().load(projektMitKosten());
+    const host = render(KostenDruck, { onClose: () => {} });
+    const text = host.textContent ?? '';
+    expect(text).toContain('Kostenschätzung nach DIN 276 (LPh 2)');
+    expect(text).toContain('Kosten-Test');
+    expect(text).toContain('1.7.2026');
+    expect(text).toContain('Gesamt brutto');
+    expect(text).toContain('1.954.575 €');
+    expect(text).toContain('2.856 €/m² BGF');
+    expect(text).toContain('% von KG 300 + 400');
+    expect(text).toContain('Brutto-Grundfläche');
+    // keine Wohnfläche im Projekt: Mengen ohne Wert erscheinen nicht
+    expect(text).not.toContain('Wohnfläche');
+    expect(text).toContain('Verfasser/in');
+  });
+
+  it('öffnet Druck, Excel und Kennwertkatalog über die Werkzeugleiste', () => {
+    useKosten.getState().load(projektMitKosten());
+    const host = render(App);
+    act(() => knopf(host, 'Kosten drucken').click());
+    expect(host.querySelector('.ko-report')).not.toBeNull();
+    act(() => knopf(host.querySelector('.ko-report')!, 'Schließen').click());
+    act(() => knopf(host, 'Excel').click());
+    expect(host.textContent).toContain('Muster-Vorlage herunterladen');
+    act(() => knopf(host, 'Abbrechen').click());
+    act(() => knopf(host, 'Kennwertkatalog').click());
+    expect(host.textContent).toContain('Katalog laden');
+  });
+
+  it('Kennwertkatalog: aus dem Projekt erstellen, Einträge wählen und als Positionen übernehmen', () => {
+    useKosten.getState().load(projekt());
+    katalogSpeichern(leseKatalog('# Name: Büro\n# Stand: 1/2026\n# Index: 130\nKG;Bezeichnung;Bezug;Grundlage;von;Mittel;bis\n300;Bauwerk;BGF;;1500;1800;2100\n700;Nebenkosten;%;300+400;;20;', 'k.csv'));
+    let zu = false;
+    const host = render(KatalogDialog, { onClose: () => (zu = true) });
+    expect(host.textContent).toContain('Büro · Stand: 1/2026 · Baupreisindex 130 · 2 Einträge');
+    expect(knopf(host, 'Einträge wählen').disabled).toBe(true);
+    act(() => (host.querySelector('thead input[type="checkbox"]') as HTMLInputElement).click());
+    act(() => knopf(host, '2 als Positionen übernehmen').click());
+    expect(zu).toBe(true);
+    expect(kosten().positionen.map((p) => [p.kg, p.mittel, p.quelle])).toEqual([
+      ['300', 1800, 'Büro, 1/2026'],
+      ['700', 20, 'Büro, 1/2026'],
+    ]);
+    expect(kosten().katalog).toEqual({ name: 'Büro', stand: '1/2026' });
+    expect(kosten().indexBasis).toBe(130);
+  });
+});

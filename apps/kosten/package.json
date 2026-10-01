@@ -1,0 +1,25 @@
+{
+  "name": "kostenermittlung",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Massen- und Kostenermittlung nach DIN 276 aus Flächen und Rauminhalten (DIN 277)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p .",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@akh/core": "*",
+    "@tauri-apps/api": "^2.12.0",
+    "exceljs": "^4.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
+  }
+}

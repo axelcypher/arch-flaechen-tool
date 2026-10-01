@@ -219,7 +219,28 @@ Schlüssel); ein Projekt kann also beide Vorlagen enthalten. Das Standardlayout 
 | `{{raum[gf].name}}` | Räume der Nicht-Vollgeschosse, deren Aufenthaltsräume vor 1990 zur Geschossfläche zählen |
 | `{{hinweis.text}}` | Zeile je Hinweis |
 
-Projektangaben (`projekt.*`, `grundstueck.*`, `bauherr.*`, `datum`) sind in beiden Apps gleich.
+Projektangaben (`projekt.*`, `grundstueck.*`, `bauherr.*`, `datum`) sind in allen Apps gleich.
+
+## Kostenermittlung
+
+Die Kostenermittlung (`apps/kosten`) nutzt dieselbe Vorlagen-Engine; ihre Vorlage wird ebenfalls getrennt
+gespeichert. Das Standardlayout ist die Muster-Vorlage (Blatt „Kosten“) ohne Hilfeblatt. Beträge sind netto
+und auf ganze Euro gerundet.
+
+| Schreibweise | Wirkung |
+|---|---|
+| `{{gesamt.netto}}`, `{{gesamt.brutto}}`, `{{gesamt.mwst}}`, `{{mwst}}` | Gesamtkosten (Mittel), Umsatzsteuer in € bzw. % |
+| `{{gesamt.brutto.von}}`, `{{gesamt.brutto.bis}}` | Bandbreite, ebenso bei `gesamt.netto` |
+| `{{kg300}}`, `{{kg300.von}}`, `{{kg330.bis}}`, `{{kg:300.mittel}}` | Summe einer Kostengruppe (1. und 2. Ebene) |
+| `{{kennwert.bgf}}`, `{{kennwert.bri}}`, `{{kennwert.nuf}}`, `{{kennwert.wofl}}` | Bauwerkskosten KG 300 + 400 brutto je Einheit (+ `.von`/`.bis`) |
+| `{{mengen.bgf}}`, `{{mengen.awf}}` … | Mengen als Einzelwert |
+| `{{stufe}}`, `{{stufe.lph}}`, `{{preisstand}}`, `{{katalog}}`, `{{faktor}}` | Grundlagen der Ermittlung |
+| `{{kg.kg}}`, `{{kg.name}}`, `{{kg.von}}`, `{{kg.mittel}}`, `{{kg.bis}}` | Zeile je Kostengruppe der 1. Ebene; `kg2.*` für die 2. Ebene |
+| `{{#kg}}` … `{{/kg}}` | Block je Kostengruppe; `position`- und `kg2`-Zeilen darin nur für diese Kostengruppe |
+| `{{position[aktiv].bezeichnung}}`, `{{position.menge}}`, `{{position.bezug}}`, `{{position.kennwert}}`, `{{position.kosten}}` | Zeile je Position; Filter `[aktiv]`, `[aus]`, `[kg=330]` |
+| `{{menge.kurz}}`, `{{menge.wert}}`, `{{menge.ermittlung}}` | Zeile je Menge; Filter `[festgelegt]` |
+| `{{stand.datum}}`, `{{stand.stufe}}`, `{{stand.brutto}}` | Zeile je festgehaltenem Kostenstand |
+| `{{hinweis.text}}` | Zeile je Hinweis |
 
 ## Einschränkungen
 

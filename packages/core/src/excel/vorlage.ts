@@ -23,7 +23,7 @@ interface StoredTemplate {
 }
 
 export interface VorlagenSpeicher {
-  art: Extract<DateiArt, 'vorlage' | 'vorlage-grz'>;
+  art: Extract<DateiArt, 'vorlage' | 'vorlage-grz' | 'vorlage-kosten'>;
   globale(): Vorlage | null;
   /** Liefert false, wenn die Vorlage zu groß für den Browserspeicher ist. */
   setGlobale(name: string, daten: Uint8Array): boolean;

@@ -262,10 +262,10 @@ export function flurText(g: Grundstueck): string {
 }
 
 /** Art einer mitgespeicherten Originaldatei */
-export type DateiArt = 'ifc' | 'dxf' | 'pdf' | 'vorlage' | 'vorlage-grz';
+export type DateiArt = 'ifc' | 'dxf' | 'pdf' | 'vorlage' | 'vorlage-grz' | 'vorlage-kosten';
 
-/** Excel-Vorlagen: „vorlage“ des Flächenrechners, „vorlage-grz“ des GRZ-Nachweises */
-export const istVorlage = (art: DateiArt) => art === 'vorlage' || art === 'vorlage-grz';
+/** Excel-Vorlagen: „vorlage“ des Flächenrechners, „vorlage-grz“ des GRZ-Nachweises, „vorlage-kosten“ der Kostenermittlung */
+export const istVorlage = (art: DateiArt) => art === 'vorlage' || art === 'vorlage-grz' || art === 'vorlage-kosten';
 
 /** Originaldatei eines Imports bzw. die Excel-Vorlage des Projekts – im Archiv unter quellen/ abgelegt */
 export interface ProjektDatei {
@@ -292,6 +292,110 @@ export interface Project {
   lageplan?: Lageplan;
   /** Festsetzungen des Bebauungsplans (GRZ/GFZ-Nachweis) */
   massNutzung?: MassNutzung;
+  /** Kostenermittlung nach DIN 276 */
+  kosten?: Kosten;
+}
+
+/* ---------- Kostenermittlung (DIN 276) ---------- */
+
+/**
+ * Bezugsgröße einer Kostenposition: Mengen nach DIN 277 bzw. daraus abgeleitete Bauteilmengen,
+ * eine eigene Menge, ein Pauschalbetrag oder ein Prozentsatz anderer Kostengruppen.
+ */
+export type KostenBezug =
+  | 'bgf'
+  | 'bri'
+  | 'nuf'
+  | 'nrf'
+  | 'tf'
+  | 'vf'
+  | 'wofl'
+  | 'grf'
+  | 'bgi'
+  | 'awf'
+  | 'iwf'
+  | 'def'
+  | 'daf'
+  | 'auf'
+  | 'fbg'
+  | 'we'
+  | 'menge'
+  | 'pauschal'
+  | 'prozent';
+
+export const KOSTEN_BEZUEGE: KostenBezug[] = ['bgf', 'bri', 'nuf', 'nrf', 'tf', 'vf', 'wofl', 'grf', 'bgi', 'awf', 'iwf', 'def', 'daf', 'auf', 'fbg', 'we', 'menge', 'pauschal', 'prozent'];
+
+export interface KostenPosition {
+  id: string;
+  /** Kostengruppe, z. B. „300“, „330“ oder „331“ */
+  kg: string;
+  bezeichnung: string;
+  bezug: KostenBezug;
+  /** nur Bezug „menge“: Menge und Einheit */
+  menge?: number;
+  einheit?: string;
+  /** nur Bezug „prozent“: Kostengruppen, deren Summe die Grundlage bildet (z. B. ["300", "400"]) */
+  basis?: string[];
+  /** Kennwert je Einheit (bei „prozent“ in %, bei „pauschal“ der Betrag) – Bandbreite von / Mittel / bis */
+  von?: number;
+  mittel?: number;
+  bis?: number;
+  /** ausgeschaltet: wird angezeigt, aber nicht gerechnet */
+  aus?: boolean;
+  /** Herkunft des Kennwerts */
+  quelle?: string;
+  bemerkung?: string;
+}
+
+/** Stufen der Kostenermittlung nach DIN 276 */
+export type KostenStufe = 'rahmen' | 'schaetzung' | 'berechnung' | 'voranschlag' | 'anschlag' | 'feststellung';
+
+export const KOSTEN_STUFEN: { id: KostenStufe; label: string; lph: string }[] = [
+  { id: 'rahmen', label: 'Kostenrahmen', lph: 'LPh 1' },
+  { id: 'schaetzung', label: 'Kostenschätzung', lph: 'LPh 2' },
+  { id: 'berechnung', label: 'Kostenberechnung', lph: 'LPh 3' },
+  { id: 'voranschlag', label: 'Kostenvoranschlag', lph: 'LPh 5/6' },
+  { id: 'anschlag', label: 'Kostenanschlag', lph: 'LPh 7' },
+  { id: 'feststellung', label: 'Kostenfeststellung', lph: 'LPh 8' },
+];
+
+/** Bandbreite von / Mittel / bis */
+export type Spanne = [number, number, number];
+
+/** festgehaltener Kostenstand – für Historie und Vorher/Nachher */
+export interface KostenStand {
+  id: string;
+  /** ISO-Datum JJJJ-MM-TT */
+  datum: string;
+  stufe: KostenStufe;
+  bemerkung: string;
+  /** Mengen zum Zeitpunkt des Stands */
+  mengen: Record<string, number>;
+  /** Kosten je Kostengruppe (1. und 2. Ebene), netto */
+  summen: Record<string, Spanne>;
+  gesamtNetto: Spanne;
+  gesamtBrutto: Spanne;
+}
+
+export interface Kosten {
+  stufe?: KostenStufe;
+  /** Preisstand der Ermittlung (ISO-Datum) */
+  datum?: string;
+  positionen: KostenPosition[];
+  /** von Hand festgelegte Mengen (überschreiben die abgeleiteten) */
+  mengen?: Partial<Record<KostenBezug, number>>;
+  /** Baupreisindex zum Stand der Kennwerte und aktuell – Faktor aktuell/Basis */
+  indexBasis?: number;
+  indexAktuell?: number;
+  /** Regionalfaktor (1 = Bundesdurchschnitt) */
+  regionalfaktor?: number;
+  /** Umsatzsteuer in % (Standard 19) */
+  mwst?: number;
+  /** Kennwerte enthalten die Umsatzsteuer */
+  kennwerteBrutto?: boolean;
+  /** Herkunft der Kennwerte */
+  katalog?: { name: string; quelle?: string; stand?: string };
+  staende?: KostenStand[];
 }
 
 /** BauNVO-Fassungen mit unterschiedlicher Berechnung von Grund- und Geschossfläche */
