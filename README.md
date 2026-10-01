@@ -49,8 +49,9 @@ einstellbar, max. 50 %) sowie ein individueller Faktor.
 - **CSV-Export** (Excel, Dezimalkomma)
 - **GRZ/GFZ-Nachweis** als eigene App im selben Repository (`apps/grz`), die dieselbe Projektdatei öffnet –
   siehe [docs/grz-gfz.md](docs/grz-gfz.md)
-- **Massen- und Kostenermittlung nach DIN 276** als eigene App (`apps/kosten`): Mengen aus dem Projekt,
-  Kennwerte mit Bandbreite, Kennwertkatalog, Kostenstände – siehe [docs/kosten.md](docs/kosten.md)
+- **Massen- und Kostenermittlung nach DIN 276** als eigene App (`apps/kosten`): Mengen aus dem Projekt mit
+  Nachweis im Grundriss und im 3D-Modell, Kennwerte mit Bandbreite, Kennwertkatalog, Kostenstände – siehe
+  [docs/kosten.md](docs/kosten.md)
 - **Projektdaten** (Projektcode, Adresse, Grundstück mit Gemarkung/Flur/Flurstück, Bauherr mit beliebig vielen
   E-Mail-Adressen und Telefonnummern) im Dialog; als Platzhalter für Excel-Vorlagen (`{{bauherr.name}}` …)
 - Rückgängig/Wiederholen, automatische Zwischenspeicherung (IndexedDB)

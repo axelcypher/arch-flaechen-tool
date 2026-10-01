@@ -1,6 +1,6 @@
 import { rectPoints } from '@core/geometry';
-import type { KostenPosition, Project, Storey } from '@core/model';
-import { createOutline, createProject, createStorey } from '@core/model';
+import type { KostenPosition, Project, RoomShape, Storey } from '@core/model';
+import { createOutline, createProject, createRoom, createStorey } from '@core/model';
 
 /**
  * Testprojekt: UG, EG, OG und DG mit Walmdach auf 12,00 × 11,25 m (135 m² je Geschoss), Grundstück 612,5 m².
@@ -32,5 +32,25 @@ export function positionen(): KostenPosition[] {
 export function projektMitKosten(): Project {
   const p = projekt();
   p.kosten = { stufe: 'schaetzung', datum: '2026-07-01', positionen: positionen() };
+  return p;
+}
+
+/**
+ * Testprojekt für den Mengennachweis: EG 12,00 × 11,25 m mit Anbau 4,00 × 5,00 m (Höhe 3,00 m) an der
+ * Ostwand, darüber ein Staffelgeschoss 8,00 × 11,25 m; drei Räume im EG, Grundstück 500 m².
+ */
+export function projektMitAnbau(): Project {
+  const p = createProject('Anbau-Test');
+  const eg = { ...createStorey('EG', 3.45), elevation: 0 } as Storey;
+  const anbau = { ...createOutline(rectPoints({ x: 12, y: 0 }, { x: 16, y: 5 }), 'Anbau'), hoehe: 3 };
+  const raum = (a: [number, number], b: [number, number], nr: string, name: string): RoomShape => createRoom(rectPoints({ x: a[0], y: a[1] }, { x: b[0], y: b[1] }), nr, name);
+  const wohnen: RoomShape = { ...raum([0.4, 0.4], [6, 5], '0.1', 'Wohnen'), wofl: { kategorie: 'voll', wohnung: 'WE 1' } };
+  const flur: RoomShape = { ...raum([6.2, 0.4], [8, 5], '0.2', 'Flur'), nutzung: 'VF', wofl: { kategorie: 'voll', wohnung: 'WE 1' } };
+  const technik: RoomShape = { ...raum([8.2, 0.4], [11.6, 5], '0.3', 'Technik'), nutzung: 'TF' };
+  eg.shapes = [createOutline(rectPoints({ x: 0, y: 0 }, { x: 12, y: 11.25 }), 'Haus'), anbau, wohnen, flur, technik];
+  const og = { ...createStorey('OG', 3.2), elevation: 3.45 } as Storey;
+  og.shapes = [createOutline(rectPoints({ x: 0, y: 0 }, { x: 8, y: 11.25 }), 'Staffelgeschoss')];
+  p.storeys = [eg, og];
+  p.meta.grundstueck.flaeche = 500;
   return p;
 }

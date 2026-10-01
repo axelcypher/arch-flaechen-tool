@@ -29,16 +29,39 @@ geleertes Feld schaltet zurück.
 | WoFl | Wohnfläche | WoFlV |
 | GRF | Gründungsfläche | BGF des untersten Geschosses |
 | BGI | Baugrubeninhalt | grob: Gründungsfläche × Tiefe des untersten Fußbodens unter ±0,00 |
-| AWF | Außenwandfläche | grob: senkrechte Außenflächen der BGF-Körper (R), einschließlich Öffnungen |
+| AWF | Außenwandfläche | grob: senkrechte Außenflächen der BGF-Körper (R), einschließlich Öffnungen und erdberührter Wände – bis zur Geschosshöhe, im obersten Geschoss bis zur Dachhaut; Wände zwischen aneinanderliegenden Umrissen zählen nicht (nur der Teil über dem niedrigeren Körper) |
 | IWF | Innenwandfläche | grob: (Σ Raumumfänge − Außenumfang) / 2 × Geschosshöhe – nur, wenn Räume erfasst sind |
 | DEF | Deckenfläche | BGF der Geschosse über dem untersten |
-| DAF | Dachfläche | Oberseiten der BGF-Körper, geneigte Flächen in wahrer Größe, ohne Deckenfläche |
+| DAF | Dachfläche | Oberseiten der BGF-Körper (R), geneigte Flächen in wahrer Größe; ebene Flächen nur, soweit kein Geschoss darüber liegt (Staffelgeschoss, Anbau). Versätze bis 25 cm zwischen den Geschossen zählen nicht; ohne Dachüberstände |
 | AUF | Außenanlagenfläche | Grundstücksfläche − überbaute Fläche |
 | FBG | Grundstücksfläche | Projektdaten |
 | WE | Wohneinheiten | Wohnungen im Projekt |
 
 Die Bauteilmengen sind Näherungen für frühe Leistungsphasen (keine Abzüge für Öffnungen, keine
-Bauteilschichten). Für die Kostenberechnung auf Elementebene eigene Mengen eintragen.
+Bauteilschichten). Für die Kostenberechnung auf Elementebene eigene Mengen eintragen. Abzugsflächen
+(Innenhof, Luftraum) erzeugen weder Wände noch Dachflächen.
+
+### Mengen prüfen
+
+Keine Menge ist nur eine Zahl: Jede ist die Summe einzelner Teile – Umrisse, Räume, Wand- und Dachflächen –,
+und genau diese Teile zeigt die Ansicht **Mengen prüfen** (Werkzeugleiste, oder Klick auf das Kürzel einer
+Menge in der Kostenansicht):
+
+- **links** alle Mengen mit ihrem abgeleiteten Wert,
+- **in der Mitte** die gewählte Menge im Bild: **Grundrisse** aller Geschosse im selben Ausschnitt (oberstes
+  zuerst) oder das **3D-Modell**. Was zählt, ist blau gefüllt und beschriftet, Abzüge sind rot schraffiert,
+  der Rest des Projekts steht nur als dünne Linie bzw. blasser Körper da. Geschosse, die zur Menge nichts
+  beitragen, sind mit „zählt nicht“ gekennzeichnet,
+- **rechts** der Rechenweg: je Teil Geschoss, Bezeichnung, Rechenansatz und Wert; die Summe ist die Menge.
+
+Ein Teil unter dem Mauszeiger wird in Bild und Tabelle gemeinsam hervorgehoben. Grundflächen, Räume,
+Gründung, Decken und Außenanlagen öffnen in den Grundrissen, Rauminhalt, Außenwand und Dach im 3D-Modell
+(drehen, zoomen, Geschosse auseinanderziehen); beide Darstellungen lassen sich für jede Menge umschalten.
+Ist eine Menge von Hand festgelegt, weist die Ansicht darauf hin – das Bild zeigt immer die abgeleitete Menge.
+
+Die Ansicht zeigt auch Schwächen des Modells: Reicht etwa ein Körper des Rauminhalts weiter nach oben als
+erwartet, liegt das an den Umrissen bzw. der Dachzuordnung im Flächenrechner („Dach aus Modell“ ohne
+Begrenzung auf die Geschosshöhe) und sollte dort korrigiert werden.
 
 ## Positionen
 

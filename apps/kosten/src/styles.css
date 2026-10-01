@@ -215,6 +215,230 @@ button.link:hover {
   text-decoration: underline;
 }
 
+/* ---------- Mengen prüfen ---------- */
+
+.mv-view {
+  display: grid;
+  grid-template-columns: minmax(250px, 300px) minmax(420px, 1fr) minmax(320px, 420px);
+  gap: 12px;
+  padding: 12px;
+  align-items: start;
+}
+@media (max-width: 1400px) {
+  .mv-view {
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  }
+  .mv-view > .mv-liste {
+    grid-row: 1 / span 2;
+  }
+  .mv-rechenweg {
+    grid-column: 2;
+  }
+}
+.mv-liste tbody tr {
+  cursor: pointer;
+}
+.mv-liste tbody tr:hover td {
+  background: var(--hover);
+}
+.mv-liste tbody tr.selected td {
+  background: var(--accent-soft);
+}
+.mv-liste .warning {
+  display: block;
+  width: fit-content;
+  margin: 2px 0 0 auto;
+  padding: 0 5px;
+}
+.mv-liste td:first-child {
+  white-space: normal;
+}
+.mv-kopf {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.mv-kopf h2 {
+  margin: 0;
+}
+.mv-umschalter {
+  display: flex;
+}
+.mv-umschalter button {
+  border-radius: 0;
+  margin-left: -1px;
+}
+.mv-umschalter button:first-child {
+  border-radius: 4px 0 0 4px;
+  margin-left: 0;
+}
+.mv-umschalter button:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.mv-rechenweg .tbl-wrap {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+.mv-rechenweg thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+.mv-rechenweg tr.mv-abzug td {
+  color: var(--danger);
+}
+.mv-legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.mv-legende i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: -2px;
+  border: 1px solid #9aa0a6;
+  border-radius: 2px;
+}
+.mv-legende i.zaehlt {
+  background: rgba(42, 91, 215, 0.45);
+  border-color: #1d3f96;
+}
+.mv-legende i.abzug {
+  background: repeating-linear-gradient(-45deg, #c0392b 0 1.5px, transparent 1.5px 4px);
+  border-color: #c0392b;
+}
+.mv-legende i.aktiv {
+  background: rgba(255, 122, 0, 0.6);
+  border-color: #b35900;
+}
+.mv-legende i.bezug {
+  background: transparent;
+}
+
+/* Grundrisse je Geschoss */
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.mp-geschoss {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mp-geschoss figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.mp-geschoss.leer figcaption {
+  color: var(--muted);
+}
+.mp-svg {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  background: #fff;
+}
+.mp-umriss {
+  fill: rgba(31, 35, 40, 0.03);
+  stroke: #6b7280;
+  stroke-width: 1;
+}
+.mp-raum {
+  fill: none;
+  stroke: #c5c9d0;
+  stroke-width: 0.6;
+}
+.mp-teil path {
+  fill: rgba(42, 91, 215, 0.32);
+  stroke: #1d3f96;
+  stroke-width: 1.4;
+}
+.mp-teil.abzug path {
+  stroke: #c0392b;
+}
+.mp-teil.kanten path {
+  fill: rgba(42, 91, 215, 0.04);
+  stroke: #2a5bd7;
+  stroke-width: 3;
+}
+.mp-teil.aktiv path {
+  fill: rgba(255, 122, 0, 0.5);
+  stroke: #b35900;
+  stroke-width: 2.2;
+}
+.mp-teil.kanten.aktiv path {
+  fill: rgba(255, 122, 0, 0.12);
+  stroke: #ff7a00;
+  stroke-width: 4;
+}
+.mp-wert {
+  fill: #1f2328;
+  font-weight: 600;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.12px;
+}
+.mp-leiste rect {
+  fill: #6b7280;
+}
+.mp-leiste text {
+  fill: #6b7280;
+}
+
+/* 3D-Modell */
+.m3d {
+  position: relative;
+  height: min(62vh, 640px);
+  min-height: 360px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.m3d-canvas {
+  position: absolute;
+  inset: 0;
+}
+.m3d-canvas canvas {
+  display: block;
+}
+.m3d-controls {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--overlay-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.m3d-hilfe {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  margin: 0;
+  padding: 2px 6px;
+  background: var(--overlay-bg);
+  border-radius: 4px;
+}
+
 /* Kennwertkatalog */
 .modal.modal-wide:has(.ko-katalog) {
   width: 820px;

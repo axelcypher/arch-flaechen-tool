@@ -7,7 +7,9 @@ import { ExcelDialog } from './components/ExcelDialog';
 import { KatalogDialog } from './components/KatalogDialog';
 import { KostenDruck } from './components/KostenDruck';
 import { KostenView } from './components/KostenView';
+import { MengenView } from './components/MengenView';
 import { oeffnen, speichern } from './datei';
+import type { MengenBezug } from './mengen';
 import { useKosten } from './store';
 
 const log = logger('app');
@@ -23,6 +25,8 @@ export function App() {
   const [excelOpen, setExcelOpen] = useState(false);
   const [druckOpen, setDruckOpen] = useState(false);
   const [katalogOpen, setKatalogOpen] = useState(false);
+  const [ansicht, setAnsicht] = useState<'kosten' | 'mengen'>('kosten');
+  const [menge, setMenge] = useState<MengenBezug>('bgf');
   const [busy, setBusy] = useState<string | null>(null);
   const [bericht, setBericht] = useState<string[]>([]);
 
@@ -103,6 +107,19 @@ export function App() {
           </button>
         </div>
         <div className="tb-group">
+          <button className={ansicht === 'kosten' ? 'active' : ''} onClick={() => setAnsicht('kosten')} title="Grundlagen, Positionen und Kostenübersicht">
+            Kosten
+          </button>
+          <button
+            className={ansicht === 'mengen' ? 'active' : ''}
+            onClick={() => setAnsicht('mengen')}
+            disabled={!hatGebaeude}
+            title="Zeigt im Grundriss und im 3D-Modell, aus welchen Flächen sich jede Menge zusammensetzt"
+          >
+            Mengen prüfen
+          </button>
+        </div>
+        <div className="tb-group">
           <button onClick={() => setKatalogOpen(true)} title="Kennwertkatalog laden, speichern und Kennwerte als Positionen übernehmen">
             Kennwertkatalog …
           </button>
@@ -152,7 +169,21 @@ export function App() {
             </button>
           </div>
         )}
-        <KostenView onKatalog={() => setKatalogOpen(true)} />
+        {ansicht === 'mengen' && hatGebaeude ? (
+          <MengenView bezug={menge} onBezug={setMenge} />
+        ) : (
+          <KostenView
+            onKatalog={() => setKatalogOpen(true)}
+            onMenge={
+              hatGebaeude
+                ? (b) => {
+                    setMenge(b);
+                    setAnsicht('mengen');
+                  }
+                : undefined
+            }
+          />
+        )}
       </main>
       {druckOpen && <KostenDruck onClose={() => setDruckOpen(false)} />}
       {excelOpen && <ExcelDialog onClose={() => setExcelOpen(false)} />}

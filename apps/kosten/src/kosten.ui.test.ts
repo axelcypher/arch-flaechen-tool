@@ -9,7 +9,7 @@ import { KatalogDialog } from './components/KatalogDialog';
 import { KostenDruck } from './components/KostenDruck';
 import { leseKatalog, katalogSpeichern } from './katalog';
 import { useKosten } from './store';
-import { projekt, projektMitKosten } from './testdaten';
+import { projekt, projektMitAnbau, projektMitKosten } from './testdaten';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -169,5 +169,54 @@ describe('Kostenermittlung', () => {
     ]);
     expect(kosten().katalog).toEqual({ name: 'Büro', stand: '1/2026' });
     expect(kosten().indexBasis).toBe(130);
+  });
+  it('Mengen prüfen: Grundrisse je Geschoss mit den Teilen der Menge und Rechenweg', () => {
+    useKosten.getState().load(projektMitAnbau());
+    const host = render(App);
+    act(() => knopf(host, 'Mengen prüfen').click());
+    // BGF: zwei Geschosse, drei Umrisse, Summe 245 m²
+    expect(host.querySelector('.mv-bild h2')?.textContent).toBe('BGF – Brutto-Grundfläche: 245,00 m²');
+    expect([...host.querySelectorAll('.mp-geschoss figcaption')].map((f) => f.textContent)).toEqual(['OG90,00 m²', 'EG155,00 m²']);
+    expect(host.querySelectorAll('.mp-teil')).toHaveLength(3);
+    expect([...host.querySelectorAll('.mp-wert')].map((t) => t.textContent).sort()).toEqual(['135,00', '20,00', '90,00']);
+    const zeilen = () => [...host.querySelectorAll('.mv-rechenweg tbody tr')];
+    expect(zeilen().map((z) => z.textContent)).toEqual(['EGHaus (R)135,00', 'EGAnbau (R)20,00', 'OGStaffelgeschoss (R)90,00', 'Summe = BGF245,00']);
+
+    // Zeile unter dem Mauszeiger hebt die Fläche im Grundriss hervor
+    act(() => zeilen()[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
+    expect(host.querySelectorAll('.mp-teil.aktiv')).toHaveLength(1);
+    expect(host.querySelector('.mp-teil.aktiv title')?.textContent).toBe('Anbau (R): 20,00');
+
+    // Gründungsfläche: nur das EG zählt, das OG bleibt als Bezug stehen
+    const menge = (kurz: string) => [...host.querySelectorAll('.mv-liste tbody tr')].find((z) => z.querySelector('strong')?.textContent === kurz) as HTMLElement;
+    act(() => menge('GRF').click());
+    expect([...host.querySelectorAll('.mp-geschoss figcaption')].map((f) => f.textContent)).toEqual(['OGzählt nicht', 'EG155,00 m²']);
+    expect(host.querySelectorAll('.mp-geschoss.leer .mp-umriss')).toHaveLength(1);
+
+    // Nutzungsfläche: ein Raum zählt, die anderen sind nur Linien
+    act(() => menge('NUF').click());
+    expect(host.querySelectorAll('.mp-teil')).toHaveLength(1);
+    expect(host.querySelectorAll('.mp-raum')).toHaveLength(3);
+    expect(zeilen()[0].textContent).toBe('EG0.1 Wohnen · NUF 125,76');
+  });
+
+  it('Mengen prüfen: Außenwand und Dach öffnen im 3D-Modell und lassen sich im Grundriss zeigen', async () => {
+    useKosten.getState().load(projektMitAnbau());
+    const host = render(App);
+    // Einstieg über das Kürzel in der Kostenansicht
+    const awf = [...host.querySelectorAll('.ko-table button.link')].find((b) => b.textContent === 'AWF') as HTMLButtonElement;
+    await act(async () => awf.click());
+    expect(host.querySelector('.mv-bild h2')?.textContent).toBe('AWF – Außenwandfläche: 307,63 m²');
+    expect(host.querySelector('.mv-umschalter button.active')?.textContent).toBe('3D-Modell');
+    expect(host.querySelectorAll('.mp-geschoss')).toHaveLength(0);
+    expect(host.querySelector('.mv-rechenweg tbody tr')?.textContent).toContain('ohne 1 Abschnitt an anderen Umrissen');
+    // im Grundriss: Wände als Kanten
+    act(() => knopf(host.querySelector('.mv-umschalter')!, 'Grundrisse').click());
+    expect(host.querySelectorAll('.mp-teil.kanten')).toHaveLength(3);
+
+    // festgelegte Menge: Hinweis, dass das Bild die abgeleitete Menge zeigt
+    act(() => useKosten.getState().update((p) => ({ ...p, kosten: { positionen: [], mengen: { awf: 300 } } })));
+    expect(host.querySelector('.mv-bild .warning')?.textContent).toContain('festgelegte Wert 300,00 m²');
+    expect(host.querySelector('.mv-bild .warning')?.textContent).toContain('abgeleitete Menge 307,63');
   });
 });

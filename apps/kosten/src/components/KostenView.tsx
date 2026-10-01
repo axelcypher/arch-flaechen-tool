@@ -14,7 +14,7 @@ import { addPositionen, mapPosition, removePosition, setKosten, useKosten } from
 const zahl = (v: number, d = 2) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /** Massen- und Kostenermittlung: Grundlagen und Mengen, Positionen nach DIN 276, Übersicht mit Kostenständen */
-export function KostenView({ onKatalog }: { onKatalog: () => void }) {
+export function KostenView({ onKatalog, onMenge }: { onKatalog: () => void; onMenge?: (b: MengenBezug) => void }) {
   const project = useKosten((s) => s.project);
   const e = useMemo(() => berechne(project), [project]);
   const k: Kosten = project.kosten ?? { positionen: [] };
@@ -78,11 +78,14 @@ export function KostenView({ onKatalog }: { onKatalog: () => void }) {
         <table className="ko-table">
           <tbody>
             {MENGEN_BEZUEGE.map((b) => (
-              <MengeZeile key={b} b={b} e={e} />
+              <MengeZeile key={b} b={b} e={e} onMenge={onMenge} />
             ))}
           </tbody>
         </table>
-        <p className="muted small-text">Mengen kommen aus dem Projekt; ein eingetragener Wert gilt statt des abgeleiteten (leer = wieder abgeleitet).</p>
+        <p className="muted small-text">
+          Mengen kommen aus dem Projekt; ein eingetragener Wert gilt statt des abgeleiteten (leer = wieder abgeleitet).
+          {onMenge && ' Ein Klick auf das Kürzel zeigt im Grundriss und im 3D-Modell, woraus sich die Menge zusammensetzt.'}
+        </p>
       </section>
 
       <section className="ko-col ko-positionen">
@@ -162,7 +165,7 @@ function neuePosition(kg: string): KostenPosition {
   return { id: newId('kp'), kg, bezeichnung: kgName(kg), bezug: b.bezug, ...(b.basis ? { basis: b.basis } : {}) };
 }
 
-function MengeZeile({ b, e }: { b: MengenBezug; e: Ergebnis }) {
+function MengeZeile({ b, e, onMenge }: { b: MengenBezug; e: Ergebnis; onMenge?: (b: MengenBezug) => void }) {
   const info = MENGEN_INFO[b];
   const m = e.mengen[b];
   const st = useKosten.getState();
@@ -176,7 +179,14 @@ function MengeZeile({ b, e }: { b: MengenBezug; e: Ergebnis }) {
   return (
     <tr className={m.festgelegt ? 'festgelegt' : ''}>
       <td title={`${info.label}: ${info.ermittlung}`}>
-        <strong>{info.kurz}</strong> <span className="muted small-text">{info.label}</span>
+        {onMenge ? (
+          <button className="link" onClick={() => onMenge(b)} title={`${info.label} prüfen: ${info.ermittlung}`}>
+            <strong>{info.kurz}</strong>
+          </button>
+        ) : (
+          <strong>{info.kurz}</strong>
+        )}{' '}
+        <span className="muted small-text">{info.label}</span>
       </td>
       <td className="num ko-menge">
         <NumberField value={m.festgelegt ? m.wert : undefined} allowEmpty min={0} digits={b === 'we' ? 0 : 2} placeholder={b === 'we' ? String(m.abgeleitet) : fmt2(m.abgeleitet)} onChange={setMenge} />
