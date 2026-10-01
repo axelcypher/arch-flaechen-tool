@@ -3,6 +3,7 @@ import { isTauri } from '../platform/files';
 import { getEntries, logger, logVersion, subscribe } from '../platform/log';
 import { useTheme } from '../platform/theme';
 import type { ThemeWahl } from '../platform/theme';
+import { UpdateKnopf } from './UpdateKnopf';
 
 const log = logger('fenster');
 
@@ -10,8 +11,8 @@ type AppWindow = import('@tauri-apps/api/window').Window;
 
 /**
  * Eigene Titelleiste (die Windows-Titelleiste ist ausgeblendet, decorations: false):
- * Ziehen zum Verschieben, Doppelklick maximiert, rechts Schema, Protokoll und Fensterknöpfe.
- * Im Browser ohne Fensterknöpfe.
+ * Ziehen zum Verschieben, Doppelklick maximiert, rechts Version/Update, Schema, Protokoll und Fensterknöpfe.
+ * Im Browser ohne Update- und Fensterknöpfe.
  */
 export interface TitleBarProps {
   /** Name der Anwendung, z. B. „Flächenrechner“ */
@@ -71,6 +72,7 @@ export function TitleBar({ app, name, dirty, onOpenLog }: TitleBarProps) {
         {dirty && <span className="titlebar-dirty" title="Ungespeicherte Änderungen"> ●</span>}
       </span>
       <span className="titlebar-drag" data-tauri-drag-region />
+      {desktop && <UpdateKnopf app={app} dirty={dirty} />}
       <ThemeMenu />
       <button
         className="titlebar-btn"

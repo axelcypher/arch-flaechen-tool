@@ -8,6 +8,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(log_plugin("grz-nachweis"))
         .plugin(tauri_plugin_dialog::init())
+        // automatische Updates: signiertes Manifest je App (tauri.conf.json → plugins.updater)
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![save_file, save_binary_file])
         .setup(|app| {
             log::info!("GRZ-Nachweis {} gestartet", app.package_info().version);

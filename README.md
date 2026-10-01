@@ -126,6 +126,24 @@ Die Version steht je App in
 Manuell gestartet wird die gewählte App in ihrer aktuellen Version (neu) gebaut. Die CI prüft zusätzlich
 alle Tauri-Hüllen mit `cargo check`.
 
+### Automatische Updates
+
+Die Desktop-Apps suchen kurz nach dem Start und danach alle sechs Stunden nach einer neuen Version. Ist eine
+verfügbar, erscheint in der Titelleiste „Update x.y.z“; ein Klick lädt den signierten Installer, installiert
+ihn und startet die Anwendung neu. Der Versionsknopf in der Titelleiste sucht auch von Hand. Die Web-Versionen
+aktualisieren sich nicht selbst.
+
+- Jede App fragt ihr eigenes Manifest ab: `releases/download/updater/<app>.json` (Release „updater“). Der
+  Release-Workflow legt es nach jedem Build aus dem `latest.json` des App-Releases dort ab.
+- Die Installer werden mit dem privaten Schlüssel signiert (GitHub-Secrets `TAURI_SIGNING_PRIVATE_KEY` und
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); der öffentliche Schlüssel steht je App in
+  `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`). Der Workflow bricht ab, wenn er vom Secret
+  `TAURI_UPDATER_PUBKEY` abweicht.
+- Für einen lokalen `tauri:build` müssen dieselben beiden Variablen gesetzt sein, sonst scheitert das
+  Signieren der Update-Dateien. `tauri:dev` braucht sie nicht.
+- Versionen ohne Updater (Flächenrechner bis 0.9.4, GRZ-Nachweis bis 0.2.3, Kostenermittlung 0.1.0) müssen
+  einmal von Hand über den Installer aktualisiert werden.
+
 ## Hinweise zur Normanwendung
 
 - Die Unterscheidung R/S erfolgt je Fläche manuell (Eigenschaften rechts).

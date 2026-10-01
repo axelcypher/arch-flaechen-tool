@@ -7,6 +7,10 @@ name: Build & Release
 #   Flächenrechner   apps/flaechenrechner   Tag v<version>
 #   GRZ-Nachweis     apps/grz               Tag grz-v<version>
 #   Kostenermittlung apps/kosten            Tag kosten-v<version>
+#
+# Automatische Updates: Die Installer werden signiert (Secrets TAURI_SIGNING_PRIVATE_KEY und
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD). Das Update-Manifest jeder App liegt als <app>.json im Release
+# „updater“ – diese feste Adresse fragen die installierten Apps ab (tauri.conf.json → plugins.updater).
 on:
   push:
     branches: [main]
@@ -42,9 +46,16 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           WAHL: ${{ inputs.app }}
+          PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           apps='[]'
           for d in flaechenrechner grz kosten; do
+            # der öffentliche Schlüssel in der App muss zum Signierschlüssel passen, sonst lehnen die Apps jedes Update ab
+            k=$(node -p "require('./apps/$d/src-tauri/tauri.conf.json').plugins.updater.pubkey")
+            if [ -n "$PUBKEY" ] && [ "$k" != "$(printf '%s' "$PUBKEY" | tr -d '[:space:]')" ]; then
+              echo "::error::$d: plugins.updater.pubkey in tauri.conf.json weicht vom Secret TAURI_UPDATER_PUBKEY ab"
+              exit 1
+            fi
             v=$(node -p "require('./apps/$d/package.json').version")
             t=$(node -p "require('./apps/$d/src-tauri/tauri.conf.json').version")
             c=$(grep -m1 '^version' "apps/$d/src-tauri/Cargo.toml" | cut -d'"' -f2)
@@ -68,6 +79,12 @@ jobs:
           echo "matrix={\"include\":$apps}" >> "$GITHUB_OUTPUT"
           if [ "$apps" = "[]" ]; then echo "any=false" >> "$GITHUB_OUTPUT"; else echo "any=true" >> "$GITHUB_OUTPUT"; fi
           echo "Releases: $apps"
+      - name: Release für die Update-Manifeste anlegen
+        if: steps.v.outputs.any == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view updater >/dev/null 2>&1 || gh release create updater --latest=false --target "$GITHUB_SHA"             --title "Update-Manifeste"             --notes "Technisches Release: enthält je App das Manifest für die automatischen Updates (<app>.json). Die Installer stehen in den Releases der einzelnen Apps."
 
   windows:
     name: ${{ matrix.name }} (Windows) + Release
@@ -92,6 +109,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/${{ matrix.app }}
           tauriScript: npx tauri
@@ -100,6 +119,9 @@ jobs:
           releaseBody: Windows-Installer (.exe / .msi) und Web-Version (${{ matrix.web }}).
           releaseDraft: false
           prerelease: false
+          # latest.json mit Signaturen; installierte Apps aktualisieren sich über den NSIS-Installer
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
       - name: Web-Version anhängen
         shell: bash
         env:
@@ -107,3 +129,19 @@ jobs:
         run: |
           cd "apps/${{ matrix.app }}/dist" && 7z a -tzip "$GITHUB_WORKSPACE/${{ matrix.web }}" . >/dev/null && cd "$GITHUB_WORKSPACE"
           gh release upload "${{ matrix.tag }}" "${{ matrix.web }}" --clobber
+      - name: Update-Manifest veröffentlichen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ matrix.tag }}" --pattern latest.json --output "${{ matrix.app }}.json" --clobber
+          # nur ein vollständiges Manifest der gebauten Version veröffentlichen
+          node -e "
+            const m = JSON.parse(require('fs').readFileSync('${{ matrix.app }}.json', 'utf8'));
+            const p = Object.entries(m.platforms || {});
+            if (m.version !== '${{ matrix.version }}') throw new Error('Manifest-Version ' + m.version + ' statt ${{ matrix.version }}');
+            if (!p.length || p.some(([, x]) => !x.signature || !x.url)) throw new Error('Manifest ohne Signatur oder Adresse');
+            console.log(m.version, p.map(([k, x]) => k + ' → ' + x.url).join('
+'));
+          "
+          gh release upload updater "${{ matrix.app }}.json" --clobber
