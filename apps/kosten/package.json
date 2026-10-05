@@ -1,7 +1,7 @@
 {
   "name": "kostenermittlung",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "description": "Massen- und Kostenermittlung nach DIN 276 aus Flächen und Rauminhalten (DIN 277)",
   "scripts": {

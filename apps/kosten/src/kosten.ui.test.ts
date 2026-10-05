@@ -185,7 +185,23 @@ describe('Kostenermittlung', () => {
     // Zeile unter dem Mauszeiger hebt die Fläche im Grundriss hervor
     act(() => zeilen()[1].dispatchEvent(new MouseEvent('mouseover', { bubbles: true })));
     expect(host.querySelectorAll('.mp-teil.aktiv')).toHaveLength(1);
-    expect(host.querySelector('.mp-teil.aktiv title')?.textContent).toBe('Anbau (R): 20,00');
+    expect(host.querySelector('.mp-teil.aktiv title')?.textContent).toBe('Anbau (R): 20,00\nKlick: abwählen');
+
+    // Teil abwählen: zählt nicht mehr, die Auswahl steht im Projekt; „Standard“ setzt zurück
+    act(() => (zeilen()[1].querySelector('input[type="checkbox"]') as HTMLInputElement).click());
+    expect(host.querySelector('.mv-bild h2')?.textContent).toBe('BGF – Brutto-Grundfläche: 225,00 m²');
+    expect(kosten().teile).toEqual({ [`bgf-${useKosten.getState().project.storeys[0].shapes[1].id}`]: false });
+    expect(zeilen()[1].className).toContain('mv-aus');
+    expect(host.querySelectorAll('.mp-teil.aus')).toHaveLength(1);
+    expect(host.querySelector('.mv-auswahl')?.textContent).toContain('2 von 3 Teilen zählen');
+    // im Grundriss wieder anwählen
+    act(() => (host.querySelector('.mp-teil.aus') as SVGGElement).dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(host.querySelector('.mv-bild h2')?.textContent).toBe('BGF – Brutto-Grundfläche: 245,00 m²');
+    expect(kosten().teile).toBeUndefined();
+    act(() => knopf(host.querySelector('.mv-auswahl')!, 'keine').click());
+    expect(host.querySelector('.mv-bild h2')?.textContent).toBe('BGF – Brutto-Grundfläche: 0,00 m²');
+    act(() => knopf(host.querySelector('.mv-auswahl')!, 'Standard').click());
+    expect(kosten().teile).toBeUndefined();
 
     // Gründungsfläche: nur das EG zählt, das OG bleibt als Bezug stehen
     const menge = (kurz: string) => [...host.querySelectorAll('.mv-liste tbody tr')].find((z) => z.querySelector('strong')?.textContent === kurz) as HTMLElement;

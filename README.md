@@ -97,7 +97,9 @@ apps/ordner/           Projektordner anlegen und prüfen: Struktur, Vorlagen, St
 Jede App hat ihre eigene Tauri-Hülle (`apps/<app>/src-tauri`), eigenen Installer und eigene Releases.
 Alle öffnen dieselbe Projektdatei (`.oap`/`.akhp`): Der Flächenrechner liefert Gebäude, Geschosse und
 Flächen, der GRZ-Nachweis pflegt Lageplan und Festsetzungen, die Kostenermittlung Positionen, Kennwerte und
-Kostenstände. Was eine App nicht kennt, bewahrt sie beim Speichern.
+Kostenstände. Was eine App nicht kennt, bewahrt sie beim Speichern. Weil jede App mit ihrer eigenen
+Kopie arbeitet, liest sie beim Speichern die Zieldatei neu und führt zusammen (`packages/core/src/zusammenfuehren.ts`):
+Was sie seit dem Öffnen nicht geändert hat, kommt aus der Datei – Änderungen anderer Apps gehen nicht verloren.
 
 Die gesamte Berechnung läuft im Frontend. Tauri liefert nur Fenster und nativen Dateidialog; ohne Tauri
 fällt `packages/core/src/platform/files.ts` automatisch auf Browser-Mechanismen zurück. Damit ist jeder

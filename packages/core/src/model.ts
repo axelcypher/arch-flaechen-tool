@@ -384,6 +384,11 @@ export interface Kosten {
   positionen: KostenPosition[];
   /** von Hand festgelegte Mengen (überschreiben die abgeleiteten) */
   mengen?: Partial<Record<KostenBezug, number>>;
+  /**
+   * Auswahl im Mengennachweis: Teile einer Menge (Umriss, Raum, Wand …), die abweichend vom Standard mitzählen
+   * (true) oder nicht (false). Schlüssel ist die Kennung des Teils, z. B. „iwf-<GlobalId der Wand>“.
+   */
+  teile?: Record<string, boolean>;
   /** Baupreisindex zum Stand der Kennwerte und aktuell – Faktor aktuell/Basis */
   indexBasis?: number;
   indexAktuell?: number;

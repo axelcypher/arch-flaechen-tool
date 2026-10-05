@@ -7,6 +7,7 @@ import type { PositionErgebnis } from '../kosten';
 import { berechne, bezugLabel, euro, HAFTUNG, katalogText, stufeLabel } from '../kosten';
 import { MENGEN_BEZUEGE, MENGEN_INFO } from '../mengen';
 import { useKosten } from '../store';
+import { useBauteile } from '../bauteile';
 
 const zahl = (v: number, d = 2) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 const datum = (iso: string) => new Date(iso).toLocaleDateString('de-DE');
@@ -14,7 +15,8 @@ const datum = (iso: string) => new Date(iso).toLocaleDateString('de-DE');
 /** Druckbare Kostenermittlung nach DIN 276 – über den Druckdialog auch als PDF. */
 export function KostenDruck({ onClose }: { onClose: () => void }) {
   const project = useKosten((s) => s.project);
-  const e = useMemo(() => berechne(project), [project]);
+  const waende = useBauteile((s) => s.waende);
+  const e = useMemo(() => berechne(project, undefined, waende), [project, waende]);
   const [positionen, setPositionen] = useState(true);
   const [mengen, setMengen] = useState(true);
   const [staende, setStaende] = useState(true);

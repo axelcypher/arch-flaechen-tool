@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { computeProject } from '@core/calc';
 import { projectToCsv } from '../core/export';
-import { ARCHIV_ENDUNGEN, readProjectFile, writeArchive } from '@core/archive';
+import { ARCHIV_ENDUNGEN, readProjectFile } from '@core/archive';
 import { ProjectFormatError } from '@core/serialize';
-import { isTauri, pickFile, saveBinaryFile, saveTextFile } from '@core/platform/files';
+import { isTauri, pickFile, saveTextFile } from '@core/platform/files';
+import { projektSpeichern } from '@core/platform/projektDatei';
 import { mitVorlage } from '../platform/vorlage';
 import type { Tool } from '../store/store';
 import { restoreIfcModel, useEditor } from '../store/store';
@@ -48,7 +49,7 @@ export function Toolbar() {
     try {
       const done = log.time(`Öffnen: ${f.name}`);
       const p = readProjectFile(new Uint8Array(await f.arrayBuffer()));
-      st.loadProject(p);
+      st.loadProject(p, p);
       done({ bytes: f.size, geschosse: p.storeys.length, dateien: p.dateien?.length ?? 0 });
       void restoreIfcModel(p);
     } catch (e) {
@@ -58,19 +59,14 @@ export function Toolbar() {
   };
 
   const onSave = async () => {
-    const p = useEditor.getState().project;
+    const { project: p, basis } = useEditor.getState();
     try {
-      const ok = await saveBinaryFile({
-        defaultName: `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`,
-        data: writeArchive(mitVorlage(p), { app: __APP_VERSION__ }),
-        filterName: 'Flächenprojekt',
-        extension: ARCHIV_ENDUNGEN[0],
-        moreExtensions: ARCHIV_ENDUNGEN.slice(1),
-        mime: 'application/zip',
-      });
-      if (ok) {
-        st.markSaved();
-        log.info('Projekt gespeichert', { name: p.name });
+      const r = await projektSpeichern({ project: p, basis, app: __APP_VERSION__, filterName: 'Flächenprojekt', fuerDatei: mitVorlage });
+      if (r) {
+        // während des Dialogs weitergezeichnet? Dann bleibt der neue Stand ungespeichert.
+        if (useEditor.getState().project === p) useEditor.getState().markSaved(r.project);
+        log.info('Projekt gespeichert', { name: p.name, zusammengefuehrt: r.zusammengefuehrt });
+        if (r.zusammengefuehrt) alert('In der Datei standen Änderungen aus einer anderen App (z. B. GRZ-Nachweis oder Kostenermittlung). Sie wurden übernommen, nicht überschrieben.');
       }
     } catch (e) {
       log.error('Speichern fehlgeschlagen', e);

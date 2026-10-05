@@ -39,6 +39,8 @@ const AUTOSAVE_KEY = 'arch-flaechen-tool:autosave';
 
 interface EditorState {
   project: Project;
+  /** Projekt beim letzten Öffnen/Speichern – Grundlage fürs Zusammenführen mit der Datei (siehe zusammenfuehren.ts) */
+  basis: Project | null;
   past: Project[];
   future: Project[];
   /** true, wenn seit dem letzten Speichern geändert */
@@ -64,9 +66,11 @@ interface EditorState {
   undo: () => void;
   redo: () => void;
 
-  loadProject: (p: Project) => void;
+  /** basis: Stand der Datei, aus der das Projekt stammt (null bei neuem Projekt) */
+  loadProject: (p: Project, basis?: Project | null) => void;
   newProject: () => void;
-  markSaved: () => void;
+  /** nach dem Speichern: das gespeicherte (ggf. mit der Datei zusammengeführte) Projekt */
+  markSaved: (gespeichert: Project) => void;
 
   setActiveStorey: (id: string) => void;
   select: (id: string | null) => void;
@@ -85,6 +89,7 @@ export const useEditor = create<EditorState>((set, get) => {
   const initial = loadAutosave() ?? createProject();
   return {
     project: initial,
+    basis: null,
     past: [],
     future: [],
     dirty: false,
@@ -136,9 +141,10 @@ export const useEditor = create<EditorState>((set, get) => {
       fixSelection(set, get);
     },
 
-    loadProject: (p) => {
+    loadProject: (p, basis = null) => {
       set({
         project: p,
+        basis,
         past: [],
         future: [],
         dirty: false,
@@ -150,7 +156,12 @@ export const useEditor = create<EditorState>((set, get) => {
       });
     },
     newProject: () => get().loadProject(createProject()),
-    markSaved: () => set({ dirty: false }),
+    markSaved: (gespeichert) => {
+      // Änderungen anderer Apps aus der Datei übernommen: neuer Ausgangspunkt, alte Schritte passen nicht mehr
+      if (gespeichert !== get().project) set({ project: gespeichert, past: [], future: [] });
+      set({ basis: gespeichert, dirty: false });
+      fixSelection(set, get);
+    },
 
     setActiveStorey: (id) => set({ activeStoreyId: id, selectedShapeId: null }),
     select: (id) => set({ selectedShapeId: id }),
@@ -330,9 +341,10 @@ if (typeof indexedDB !== 'undefined') {
     .then((raw) => {
       const st = useEditor.getState();
       if (!raw || st.past.length || st.dirty) return;
-      // bis 0.2 als JSON-Text, seither als Objekt (Originaldateien als Uint8Array)
-      const p = typeof raw === 'string' ? parseProject(raw) : parseProjectData(raw);
-      st.loadProject(p);
+      // bis 0.2 als JSON-Text, bis 0.10 als Projekt, seither mit Basis fürs Zusammenführen
+      const mitBasis = typeof raw === 'object' && raw !== null && 'project' in raw ? (raw as { project: unknown; basis: unknown }) : null;
+      const p = typeof raw === 'string' ? parseProject(raw) : parseProjectData(mitBasis ? mitBasis.project : raw);
+      st.loadProject(p, mitBasis?.basis ? parseProjectData(mitBasis.basis) : null);
       void restoreIfcModel(p);
       log.info('Zwischenstand wiederhergestellt', { name: p.name, geschosse: p.storeys.length });
     })
@@ -344,10 +356,11 @@ if (typeof indexedDB !== 'undefined') {
 
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
 useEditor.subscribe((s, prev) => {
-  if (s.project === prev.project) return;
+  if (s.project === prev.project && s.basis === prev.basis) return;
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => {
-    idbSet(AUTOSAVE_KEY, s.project)
+    const { project, basis } = useEditor.getState();
+    idbSet(AUTOSAVE_KEY, { project, basis })
       .then(() => {
         try {
           localStorage.removeItem(AUTOSAVE_KEY);

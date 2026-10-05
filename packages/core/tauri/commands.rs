@@ -35,6 +35,57 @@ async fn save_binary_file(
     save_bytes(&app, &default_name, &bytes, &filter_name, &extensions)
 }
 
+/// Speichern-Dialog ohne Schreiben: liefert den gewählten Pfad oder `None` bei Abbruch. Zusammen mit
+/// `read_binary_file` und `write_binary_file` für Projektdateien, die beim Speichern mit dem bisherigen
+/// Inhalt der Zieldatei zusammengeführt werden.
+#[tauri::command]
+async fn pick_save_path(
+    app: tauri::AppHandle,
+    default_name: String,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Result<Option<String>, String> {
+    let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(&default_name)
+        .add_filter(&filter_name, &exts)
+        .blocking_save_file();
+    let Some(file_path) = picked else {
+        return Ok(None);
+    };
+    let path = file_path.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.display().to_string()))
+}
+
+/// Inhalt einer Datei (Base64) oder `None`, wenn es sie nicht gibt.
+#[tauri::command]
+async fn read_binary_file(path: String) -> Result<Option<String>, String> {
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(Some(base64::engine::general_purpose::STANDARD.encode(bytes))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => {
+            log::error!("Lesen fehlgeschlagen: {}: {}", path, e);
+            Err(format!("{}: {}", path, e))
+        }
+    }
+}
+
+/// Schreibt Base64-kodierte Daten in eine Datei (Pfad aus `pick_save_path`).
+#[tauri::command]
+async fn write_binary_file(path: String, contents_base64: String) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(contents_base64.as_bytes())
+        .map_err(|e| format!("Ungültige Daten: {e}"))?;
+    std::fs::write(&path, &bytes).map_err(|e| {
+        log::error!("Speichern fehlgeschlagen: {}: {}", path, e);
+        format!("{}: {}", path, e)
+    })?;
+    log::info!("Gespeichert: {} ({} Bytes)", path, bytes.len());
+    Ok(())
+}
+
 fn save_bytes(
     app: &tauri::AppHandle,
     default_name: &str,

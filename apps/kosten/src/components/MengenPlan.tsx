@@ -19,12 +19,15 @@ export function MengenPlan({
   einheit,
   aktiv,
   onAktiv,
+  onUmschalten,
 }: {
   project: Project;
   menge: MengeNachweis;
   einheit: string;
   aktiv: string | null;
   onAktiv: (id: string | null) => void;
+  /** Klick auf ein Teil: an- bzw. abwählen */
+  onUmschalten?: (id: string) => void;
 }) {
   const lageplan = menge.lageplan ? (project.lageplan?.flaechen ?? []).filter((f) => !f.nachbar && f.points.length >= 3) : [];
   const geschosse = project.storeys.filter((s) => s.shapes.some((x) => x.points.length >= 3));
@@ -47,7 +50,7 @@ export function MengenPlan({
       {/* oberstes Geschoss zuerst – wie ein Schnitt von oben nach unten */}
       {[...geschosse].reverse().map((s) => {
         const teile = teileVon(s);
-        const summe = teile.reduce((a, t) => a + t.wert, 0);
+        const summe = teile.reduce((a, t) => a + (t.zaehlt !== false ? t.wert : 0), 0);
         // Teile, die über mehrere Geschosse reichen (Wohnungen), nicht je Geschoss summieren
         const eigen = teile.every((t) => t.plan!.every((f) => f.storeyId === s.id));
         return (
@@ -72,10 +75,12 @@ export function MengenPlan({
                   <path key={x.id} d={pfad(x.points)} className={x.kind === 'outline' ? 'mp-umriss' : 'mp-raum'} vectorEffect="non-scaling-stroke" />
                 ))}
               {teile.map((t) => (
-                <TeilFlaeche key={t.id} t={t} storeyId={s.id} kanten={!!menge.kanten} aktiv={aktiv === t.id} onAktiv={onAktiv} />
+                <TeilFlaeche key={t.id} t={t} storeyId={s.id} kanten={!!menge.kanten} aktiv={aktiv === t.id} onAktiv={onAktiv} onUmschalten={onUmschalten} />
               ))}
               {!menge.kanten &&
-                teile.map((t) =>
+                teile
+                  .filter((t) => t.zaehlt !== false)
+                  .map((t) =>
                   t.plan!
                     .filter((f) => f.storeyId === s.id)
                     .map((f, i) => {
@@ -105,15 +110,34 @@ export function MengenPlan({
   );
 }
 
-function TeilFlaeche({ t, storeyId, kanten, aktiv, onAktiv }: { t: Teil; storeyId: string; kanten: boolean; aktiv: boolean; onAktiv: (id: string | null) => void }) {
+function TeilFlaeche({
+  t,
+  storeyId,
+  kanten,
+  aktiv,
+  onAktiv,
+  onUmschalten,
+}: {
+  t: Teil;
+  storeyId: string;
+  kanten: boolean;
+  aktiv: boolean;
+  onAktiv: (id: string | null) => void;
+  onUmschalten?: (id: string) => void;
+}) {
   const abzug = t.wert < 0;
+  const aus = t.zaehlt === false;
   return (
-    <g className={`mp-teil${kanten ? ' kanten' : ''}${abzug ? ' abzug' : ''}${aktiv ? ' aktiv' : ''}`} onMouseEnter={() => onAktiv(t.id)}>
-      <title>{`${t.bezeichnung}: ${fmt2(t.wert)}${t.ansatz ? ` (${t.ansatz})` : ''}`}</title>
+    <g
+      className={`mp-teil${kanten ? ' kanten' : ''}${abzug ? ' abzug' : ''}${aus ? ' aus' : ''}${aktiv ? ' aktiv' : ''}${onUmschalten ? ' klickbar' : ''}`}
+      onMouseEnter={() => onAktiv(t.id)}
+      onClick={() => onUmschalten?.(t.id)}
+    >
+      <title>{`${t.bezeichnung}: ${fmt2(t.wert)}${t.ansatz ? ` (${t.ansatz})` : ''}${aus ? ' – zählt nicht' : ''}${onUmschalten ? `\nKlick: ${aus ? 'anwählen' : 'abwählen'}` : ''}`}</title>
       {t.plan!
         .filter((f) => f.storeyId === storeyId)
         .map((f, i) => (
-          <path key={i} d={flaechenPfad(f)} fillRule="evenodd" fill={abzug && !kanten ? `url(#mp-abzug-${storeyId})` : undefined} vectorEffect="non-scaling-stroke" />
+          <path key={i} d={flaechenPfad(f)} fillRule="evenodd" fill={abzug && !kanten && !aus ? `url(#mp-abzug-${storeyId})` : undefined} vectorEffect="non-scaling-stroke" />
         ))}
     </g>
   );

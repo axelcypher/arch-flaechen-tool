@@ -11,7 +11,13 @@ pub fn run() {
         // automatische Updates: signiertes Manifest je App (tauri.conf.json → plugins.updater)
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![save_file, save_binary_file])
+        .invoke_handler(tauri::generate_handler![
+            save_file,
+            save_binary_file,
+            pick_save_path,
+            read_binary_file,
+            write_binary_file
+        ])
         .setup(|app| {
             log::info!("Kostenermittlung {} gestartet", app.package_info().version);
             Ok(())

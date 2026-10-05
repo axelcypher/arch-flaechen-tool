@@ -15,6 +15,7 @@ import type { Flaeche3, MengeNachweis, Nachweis, Teil } from '../nachweis';
 const FARBE = 0x2a5bd7;
 const FARBE_AKTIV = 0xff7a00;
 const FARBE_ABZUG = 0xc0392b;
+const FARBE_AUS = 0x9aa0a6;
 
 interface Szene {
   renderer: THREE.WebGLRenderer;
@@ -32,17 +33,22 @@ export default function Mengen3D({
   menge,
   aktiv,
   onAktiv,
+  onUmschalten,
 }: {
   project: Project;
   nachweis: Nachweis;
   menge: MengeNachweis;
   aktiv: string | null;
   onAktiv: (id: string | null) => void;
+  /** Klick auf ein Teil (ohne Drehen): an- bzw. abwählen */
+  onUmschalten?: (id: string) => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const three = useRef<Szene | null>(null);
   const aktivRef = useRef(onAktiv);
   aktivRef.current = onAktiv;
+  const umschaltenRef = useRef(onUmschalten);
+  umschaltenRef.current = onUmschalten;
   const aktivId = useRef(aktiv);
   const [explode, setExplode] = useState(false);
   const [fehler, setFehler] = useState(false);
@@ -94,17 +100,27 @@ export default function Mengen3D({
     loop();
 
     // Teil unter dem Mauszeiger hervorheben (nicht während des Drehens)
-    let gedrueckt = false;
+    let gedrueckt: { x: number; y: number } | null = null;
     let letztes: string | null = null;
-    const onDown = () => (gedrueckt = true);
-    const onUp = () => (gedrueckt = false);
-    const onMove = (e: PointerEvent) => {
-      if (gedrueckt) return;
+    const treffer = (e: PointerEvent) => {
       const r = renderer.domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       const rc = new THREE.Raycaster();
       rc.setFromCamera(ndc, camera);
-      const id = (rc.intersectObjects(t.teile, false)[0]?.object.userData.teil as string | undefined) ?? null;
+      return (rc.intersectObjects(t.teile, false)[0]?.object.userData.teil as string | undefined) ?? null;
+    };
+    const onDown = (e: PointerEvent) => (gedrueckt = { x: e.clientX, y: e.clientY });
+    const onUp = (e: PointerEvent) => {
+      // Klick ohne Drehen/Verschieben: Teil an- bzw. abwählen
+      if (gedrueckt && e.button === 0 && e.target === renderer.domElement && Math.hypot(e.clientX - gedrueckt.x, e.clientY - gedrueckt.y) < 4) {
+        const id = treffer(e);
+        if (id) umschaltenRef.current?.(id);
+      }
+      gedrueckt = null;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (gedrueckt) return;
+      const id = treffer(e);
       if (id !== letztes) aktivRef.current((letztes = id));
     };
     const onLeave = () => {
@@ -159,7 +175,7 @@ export default function Mengen3D({
         new THREE.MeshStandardMaterial({ transparent: true, side: THREE.DoubleSide, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       );
       const kanten = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), new THREE.LineBasicMaterial());
-      mesh.userData = { teil: teil.id, abzug: teil.wert < 0, kanten };
+      mesh.userData = { teil: teil.id, abzug: teil.wert < 0, aus: teil.zaehlt === false, kanten };
       mesh.renderOrder = 2;
       t.content.add(mesh, kanten);
       t.teile.push(mesh);
@@ -220,12 +236,12 @@ export default function Mengen3D({
 
 function faerben(teile: THREE.Mesh[], aktiv: string | null) {
   for (const mesh of teile) {
-    const { teil, abzug, kanten } = mesh.userData as { teil: string; abzug: boolean; kanten: THREE.LineSegments };
+    const { teil, abzug, aus, kanten } = mesh.userData as { teil: string; abzug: boolean; aus: boolean; kanten: THREE.LineSegments };
     const istAktiv = teil === aktiv;
     const mat = mesh.material as THREE.MeshStandardMaterial;
-    mat.color.setHex(istAktiv ? FARBE_AKTIV : abzug ? FARBE_ABZUG : FARBE);
-    mat.opacity = istAktiv ? 0.95 : 0.78;
-    (kanten.material as THREE.LineBasicMaterial).color.setHex(istAktiv ? 0xb35900 : abzug ? 0x8e2b20 : 0x1d3f96);
+    mat.color.setHex(istAktiv ? FARBE_AKTIV : aus ? FARBE_AUS : abzug ? FARBE_ABZUG : FARBE);
+    mat.opacity = istAktiv ? 0.95 : aus ? 0.35 : 0.78;
+    (kanten.material as THREE.LineBasicMaterial).color.setHex(istAktiv ? 0xb35900 : aus ? 0x8a8f99 : abzug ? 0x8e2b20 : 0x1d3f96);
   }
 }
 

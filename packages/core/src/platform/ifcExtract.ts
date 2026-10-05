@@ -92,21 +92,34 @@ export function extractIfc(api: IfcAPI, T: IfcTypeCodes, data: Uint8Array, onPro
       }
     };
 
-    // Nettoflächen der Räume aus Mengen (Qto_SpaceBaseQuantities / BaseQuantities)
+    // Nettoflächen der Räume aus Mengen (Qto_SpaceBaseQuantities / BaseQuantities),
+    // Außen-/Innenbauteil aus den Eigenschaften (Pset_WallCommon u. a.: IsExternal)
     const spaceIds = ids(T.IFCSPACE);
     const spaceSet = new Set(spaceIds);
     const netArea = new Map<number, number>();
+    const isExternal = new Map<number, boolean>();
     for (const id of ids(T.IFCRELDEFINESBYPROPERTIES)) {
       const l = api.GetLine(m, id);
-      const objs = ((l.RelatedObjects ?? []) as unknown[]).map((o) => val(o) as number).filter((o) => spaceSet.has(o));
-      if (!objs.length) continue;
+      const alle = ((l.RelatedObjects ?? []) as unknown[]).map((o) => val(o) as number);
       const def = api.GetLine(m, val(l.RelatingPropertyDefinition) as number);
-      const qs = (def?.Quantities ?? []) as unknown[];
-      for (const q of qs) {
-        const ql = api.GetLine(m, val(q) as number);
-        const n = str(ql?.Name);
-        const a = val(ql?.AreaValue);
-        if (typeof a === 'number' && (n === 'NetFloorArea' || n === 'NetArea')) for (const o of objs) netArea.set(o, a);
+      const objs = alle.filter((o) => spaceSet.has(o));
+      if (objs.length) {
+        const qs = (def?.Quantities ?? []) as unknown[];
+        for (const q of qs) {
+          const ql = api.GetLine(m, val(q) as number);
+          const n = str(ql?.Name);
+          const a = val(ql?.AreaValue);
+          if (typeof a === 'number' && (n === 'NetFloorArea' || n === 'NetArea')) for (const o of objs) netArea.set(o, a);
+        }
+      }
+      if (/^Pset_.*Common$/.test(str(def?.Name))) {
+        for (const pr of (def?.HasProperties ?? []) as unknown[]) {
+          const pl = api.GetLine(m, val(pr) as number);
+          if (str(pl?.Name) !== 'IsExternal') continue;
+          const v = val(pl?.NominalValue);
+          const b = v === true || v === 'T' || v === '.T.' ? true : v === false || v === 'F' || v === '.F.' ? false : undefined;
+          if (b !== undefined) for (const o of alle) isExternal.set(o, b);
+        }
       }
     }
 
@@ -145,8 +158,11 @@ export function extractIfc(api: IfcAPI, T: IfcTypeCodes, data: Uint8Array, onPro
       if (SKIP_TYPES.has(type)) return;
       const { tris, color } = collect(mesh as never);
       if (!tris.length) return;
+      const ext = isExternal.get(mesh.expressID);
       elements.push({
         expressId: mesh.expressID,
+        ...(str(line.GlobalId) ? { globalId: str(line.GlobalId) } : {}),
+        ...(ext !== undefined ? { isExternal: ext } : {}),
         type,
         name: str(line.Name),
         predefinedType: str(line.PredefinedType).toUpperCase(),

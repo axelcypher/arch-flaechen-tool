@@ -1,6 +1,8 @@
 import type { ProjectResult } from '@core/calc';
 import type { KostenBezug, Project } from '@core/model';
+import { useBauteile } from './bauteile';
 import { mengenNachweis } from './nachweis';
+import type { IfcWand } from './waende';
 
 /**
  * Mengen für die Kostenermittlung: Grundflächen und Rauminhalte nach DIN 277 und daraus abgeleitete
@@ -24,7 +26,7 @@ export const MENGEN_INFO: Record<MengenBezug, { kurz: string; label: string; ein
   grf: { kurz: 'GRF', label: 'Gründungsfläche', einheit: 'm²', ermittlung: 'BGF des untersten Geschosses' },
   bgi: { kurz: 'BGI', label: 'Baugrubeninhalt', einheit: 'm³', ermittlung: 'grob: Gründungsfläche × Tiefe des untersten Fußbodens unter ±0,00' },
   awf: { kurz: 'AWF', label: 'Außenwandfläche', einheit: 'm²', ermittlung: 'grob: senkrechte Außenflächen der BGF-Körper (R) bis zur Dachhaut, einschließlich Öffnungen' },
-  iwf: { kurz: 'IWF', label: 'Innenwandfläche', einheit: 'm²', ermittlung: 'grob: (Σ Raumumfänge − Außenumfang) / 2 × Geschosshöhe' },
+  iwf: { kurz: 'IWF', label: 'Innenwandfläche', einheit: 'm²', ermittlung: 'Innenwände aus dem IFC-Modell, Länge × Höhe je Wand (Öffnungen übermessen); ohne Modell grob aus den Raumumfängen' },
   def: { kurz: 'DEF', label: 'Deckenfläche', einheit: 'm²', ermittlung: 'BGF der Geschosse über dem untersten' },
   daf: { kurz: 'DAF', label: 'Dachfläche', einheit: 'm²', ermittlung: 'Oberseiten der BGF-Körper (R), geneigt in wahrer Größe, soweit kein Geschoss darüber liegt' },
   auf: { kurz: 'AUF', label: 'Außenanlagenfläche', einheit: 'm²', ermittlung: 'Grundstücksfläche − überbaute Fläche' },
@@ -43,16 +45,19 @@ export type Mengen = Record<MengenBezug, Menge>;
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-/** abgeleitete Mengen ohne Festlegungen: je Menge die Summe ihrer Teile im Mengennachweis */
-export function mengenAbgeleitet(project: Project, result?: ProjectResult): Record<MengenBezug, number> {
-  const n = mengenNachweis(project, result).mengen;
+/** Wände aus dem IFC-Modell des geöffneten Projekts (siehe bauteile.ts) */
+const aktuelleWaende = () => useBauteile.getState().waende;
+
+/** abgeleitete Mengen ohne Festlegungen: je Menge die Summe ihrer mitzählenden Teile im Mengennachweis */
+export function mengenAbgeleitet(project: Project, result?: ProjectResult, waende: IfcWand[] | null = aktuelleWaende()): Record<MengenBezug, number> {
+  const n = mengenNachweis(project, result, waende).mengen;
   const out = {} as Record<MengenBezug, number>;
   for (const b of MENGEN_BEZUEGE) out[b] = b === 'we' ? n[b].summe : r2(n[b].summe);
   return out;
 }
 
-export function mengen(project: Project, result?: ProjectResult): Mengen {
-  const ab = mengenAbgeleitet(project, result);
+export function mengen(project: Project, result?: ProjectResult, waende: IfcWand[] | null = aktuelleWaende()): Mengen {
+  const ab = mengenAbgeleitet(project, result, waende);
   const fest = project.kosten?.mengen ?? {};
   const out = {} as Mengen;
   for (const b of MENGEN_BEZUEGE) {

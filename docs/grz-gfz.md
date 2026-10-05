@@ -12,7 +12,10 @@ Bebauungsplan gilt.
 - **Pflegen:** Festsetzungen, Lageplan-Flächen (zeichnen als Polygon oder Rechteck, Nutzung, Versiegelung,
   Nachbar-Kennzeichen), Vollgeschoss je Geschoss festlegen, Aufenthaltsräume einstufen.
 - **Speichern:** in dieselbe Projektdatei. Der Flächenrechner zeigt Lageplan und Festsetzungen nicht an,
-  bewahrt sie aber beim Speichern; umgekehrt bewahrt der GRZ-Nachweis alles, was der Flächenrechner pflegt.
+  bewahrt sie aber beim Speichern; umgekehrt bewahrt der GRZ-Nachweis alles, was der Flächenrechner pflegt. Beim Speichern
+  liest jede App die Zieldatei neu und übernimmt, was eine andere App dort inzwischen gespeichert hat, statt es
+  mit ihrem eigenen, älteren Stand zu überschreiben (ab Flächenrechner 0.11.0, GRZ-Nachweis 0.4.0,
+  Kostenermittlung 0.4.0).
 
 ## Welches Recht gilt
 

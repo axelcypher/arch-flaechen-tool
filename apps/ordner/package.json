@@ -1,7 +1,7 @@
 {
   "name": "projektordner",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Projektordner nach einheitlichem Schema anlegen und prüfen: Ordnerbaum, Vorlagen, Stammdaten (projekt.json)",
   "scripts": {

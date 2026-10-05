@@ -1,8 +1,10 @@
-import { ARCHIV_ENDUNGEN, readProjectFile, writeArchive } from '@core/archive';
+import { ARCHIV_ENDUNGEN, readProjectFile } from '@core/archive';
 import { buildFromIfc } from '@core/ifcImport';
 import type { Project } from '@core/model';
 import { addDatei, createProject } from '@core/model';
-import { pickFile, saveBinaryFile } from '@core/platform/files';
+import { pickFile } from '@core/platform/files';
+import type { ProjektGespeichert } from '@core/platform/projektDatei';
+import { projektSpeichern } from '@core/platform/projektDatei';
 import { logger } from '@core/platform/log';
 import { vorlage } from './vorlage';
 
@@ -11,6 +13,8 @@ const log = logger('datei');
 export interface Geoeffnet {
   project: Project;
   datei: string;
+  /** Stand der Datei (null beim IFC-Import) */
+  basis: Project | null;
   /** Hinweise aus dem IFC-Import */
   bericht: string[];
 }
@@ -39,23 +43,14 @@ export async function oeffnen(onProgress?: (msg: string) => void): Promise<Geoef
     if (r.lageplan) p.lageplan = r.lageplan;
     p = addDatei(p, f.name, 'ifc', bytes).project;
     log.info(`IFC übernommen: ${f.name}`, r.report);
-    return { project: p, datei: `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`, bericht: r.report };
+    return { project: p, datei: `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`, basis: null, bericht: r.report };
   }
   const p = readProjectFile(bytes);
   log.info(`Projekt geöffnet: ${f.name}`);
-  return { project: p, datei: f.name, bericht: [] };
+  return { project: p, datei: f.name, basis: p, bericht: [] };
 }
 
 /** Speichert das Projekt als Archiv (.oap/.akhp) – dieselbe Datei öffnet auch der Flächenrechner */
-export async function speichern(p: Project, datei: string | null): Promise<string | null> {
-  const name = datei && /\.(oap|akhp)$/i.test(datei) ? datei : `${safeFileName(p.name)}.${ARCHIV_ENDUNGEN[0]}`;
-  const ok = await saveBinaryFile({
-    defaultName: name,
-    data: writeArchive(vorlage.mit(p), { app: `GRZ-Nachweis ${__APP_VERSION__}` }),
-    filterName: 'Projekt',
-    extension: ARCHIV_ENDUNGEN[0],
-    moreExtensions: ARCHIV_ENDUNGEN.slice(1),
-    mime: 'application/zip',
-  });
-  return ok ? name : null;
+export function speichern(p: Project, datei: string | null, basis: Project | null): Promise<ProjektGespeichert | null> {
+  return projektSpeichern({ project: p, basis, datei, app: `GRZ-Nachweis ${__APP_VERSION__}`, fuerDatei: vorlage.mit });
 }

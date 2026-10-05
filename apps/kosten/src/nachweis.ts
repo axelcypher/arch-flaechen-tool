@@ -12,6 +12,7 @@ import type { Point3, SolidFaces } from '@core/roof';
 import { DACH_TYPEN, solidFaces } from '@core/roof';
 import { meshRoofHeightAt } from '@core/roofMesh';
 import type { MengenBezug } from './mengen';
+import type { IfcWand } from './waende';
 
 /**
  * Mengennachweis: Jede Menge der Kostenermittlung ist die Summe einzelner Teile (Umrisse, Räume, Wand- und
@@ -43,6 +44,10 @@ export interface Teil {
   ansatz?: string;
   /** Beitrag zur Menge, Abzüge negativ */
   wert: number;
+  /** zählt ohne eigene Auswahl nicht mit (z. B. Außenwand in der Liste der Wände) */
+  standardAus?: boolean;
+  /** zählt zur Menge – Standard bzw. Auswahl in Project.kosten.teile (gesetzt von mengenNachweis) */
+  zaehlt?: boolean;
   plan?: PlanFlaeche[];
   raum?: Flaeche3[];
 }
@@ -50,7 +55,7 @@ export interface Teil {
 export interface MengeNachweis {
   bezug: MengenBezug;
   teile: Teil[];
-  /** Summe der Teile = abgeleitete Menge */
+  /** Summe der mitzählenden Teile = abgeleitete Menge */
   summe: number;
   /** übliche Darstellung: Grundrisse oder 3D-Modell */
   ansicht: 'plan' | 'raum';
@@ -75,6 +80,8 @@ export interface Nachweis {
   geschosse: GeschossInfo[];
 }
 
+/** Wände unter dieser Höhe [m] (Aufkantungen, Sockel) zählen ohne eigene Auswahl nicht als Innenwand */
+const NIEDRIG = 0.5;
 /** Höhe [m], ab der ein Geschoss als „über“ einer Dachfläche liegend gilt (Toleranz für Deckenaufbauten) */
 const UEBERDECKT_TOLERANZ = 0.5;
 /** Versatz [m] zwischen den Umrissen übereinanderliegender Geschosse (unterschiedliche Wandstärken), bis zu dem ein Streifen nicht als Dachfläche zählt */
@@ -139,7 +146,7 @@ function dachText(s: OutlineShape): string {
   return s.dach.neigung ? `${label}, ${fmt2(s.dach.neigung).replace(/,00$/, '')}°` : label;
 }
 
-function berechneNachweis(project: Project, result: ProjectResult): Nachweis {
+function berechneNachweis(project: Project, result: ProjectResult, waende: IfcWand[] | null): Nachweis {
   const elev = storeyElevations(project);
   const storeys = project.storeys.map((s, i) => ({ s, i, e: elev[i] }));
   const reihenfolge = [...storeys].sort((a, b) => a.e - b.e);
@@ -401,22 +408,62 @@ function berechneNachweis(project: Project, result: ProjectResult): Nachweis {
     'Oberseiten der umschlossenen BGF-Körper (R), geneigte Flächen in wahrer Größe; ebene Flächen nur, soweit kein Geschoss darüber liegt (Versätze bis 25 cm zwischen den Geschossen zählen nicht). Ohne Dachüberstände.';
 
   /* ---------- Innenwände ---------- */
-  const iwf = neu('iwf', 'plan', { kanten: true });
-  for (const { s } of storeys) {
-    const rr = raeume(s).filter((r) => !r.subtract);
-    const raumumfang = rr.reduce((a, r) => a + perimeter(r.points), 0);
-    if (raumumfang <= 0) continue;
-    const aussen = rUmrisse(s).reduce((a, u) => a + perimeter(u.points), 0);
-    iwf.teile.push({
-      id: `iwf-${s.id}`,
-      geschoss: s.name,
-      bezeichnung: `${rr.length} ${rr.length === 1 ? 'Raum' : 'Räume'}`,
-      ansatz: `(Σ Raumumfänge ${fmt2(raumumfang)} m − Außenumfang ${fmt2(aussen)} m) / 2 × ${fmt2(s.hoehe)} m`,
-      wert: (Math.max(0, raumumfang - aussen) / 2) * s.hoehe,
-      plan: rr.map((r) => ({ storeyId: s.id, points: r.points })),
-    });
+  const iwf = neu('iwf', 'plan');
+  if (waende?.length) {
+    // Außen oder innen: IsExternal nur, wenn das Modell es erkennbar pflegt (beide Werte kommen vor) – sonst
+    // nach der Lage: Eine Außenwand liegt auf ganzer Länge am umschlossenen BGF-Umriss ihres Geschosses.
+    const gepflegt = waende.some((w) => w.isExternal === true) && waende.some((w) => w.isExternal === false);
+    const geschossVon = (w: IfcWand) =>
+      storeys.find((x) => x.s.name === w.geschoss && Math.abs(x.e - w.geschossKote) < 0.05) ??
+      storeys.find((x) => x.s.name === w.geschoss) ??
+      [...reihenfolge].reverse().find((x) => x.e <= w.z0 + 0.3);
+    let aussen = 0;
+    for (const w of waende) {
+      const g = geschossVon(w);
+      if (!g) continue;
+      const umr = rUmrisse(g.s);
+      const proben = [0.15, 0.5, 0.85].map((f) => ({ x: w.achse[0].x + (w.achse[1].x - w.achse[0].x) * f, y: w.achse[0].y + (w.achse[1].y - w.achse[0].y) * f }));
+      const amUmriss = umr.length > 0 && proben.every((p) => umr.some((u) => distanceToEdges(p, u.points) <= w.dicke / 2 + 0.15));
+      const imGebaeude = !umr.length || proben.some((p) => innen(g.s, p));
+      const istAussen = gepflegt && w.isExternal !== undefined ? w.isExternal : amUmriss;
+      const hoehe = w.z1 - w.z0;
+      const grund = istAussen ? 'Außenwand' : !imGebaeude ? 'außerhalb der BGF' : hoehe < NIEDRIG ? 'niedrige Wand' : '';
+      if (istAussen) aussen++;
+      const voll = Math.abs(w.flaeche - w.laenge * hoehe) < 0.01;
+      iwf.teile.push({
+        id: `iwf-${w.id}`,
+        geschoss: g.s.name,
+        bezeichnung: `${w.name || 'Wand'}${grund ? ` – ${grund}` : ''}`,
+        ansatz: `${voll ? `Länge ${fmt2(w.laenge)} m × Höhe ${fmt2(hoehe)} m` : `Länge ${fmt2(w.laenge)} m, Höhe bis ${fmt2(hoehe)} m (Ansichtsfläche)`}, Dicke ${Math.round(w.dicke * 100)} cm`,
+        wert: w.flaeche,
+        standardAus: !!grund,
+        plan: [{ storeyId: g.s.id, points: w.grundriss }],
+        raum: w.ansicht.map((r) => ({ aussen: r, geschoss: g.i })),
+      });
+    }
+    iwf.teile.sort((a, b) => Number(!!a.standardAus) - Number(!!b.standardAus));
+    iwf.hinweis = `Wände aus dem IFC-Modell, je Wand die Ansichtsfläche einer Seite (Länge × Höhe, Öffnungen übermessen). Nicht mit zählen Außenwände (${
+      gepflegt ? 'laut Modell, IsExternal' : 'auf ganzer Länge am BGF-Umriss'
+    }${aussen ? `: ${aussen}` : ''}), Wände außerhalb der BGF und Wände unter ${fmt2(NIEDRIG)} m Höhe (Aufkantungen, Sockel). Jede Wand lässt sich einzeln an- oder abwählen.`;
+  } else {
+    iwf.kanten = true;
+    for (const { s } of storeys) {
+      const rr = raeume(s).filter((r) => !r.subtract);
+      const raumumfang = rr.reduce((a, r) => a + perimeter(r.points), 0);
+      if (raumumfang <= 0) continue;
+      const aussen = rUmrisse(s).reduce((a, u) => a + perimeter(u.points), 0);
+      iwf.teile.push({
+        id: `iwf-${s.id}`,
+        geschoss: s.name,
+        bezeichnung: `${rr.length} ${rr.length === 1 ? 'Raum' : 'Räume'}`,
+        ansatz: `(Σ Raumumfänge ${fmt2(raumumfang)} m − Außenumfang ${fmt2(aussen)} m) / 2 × ${fmt2(s.hoehe)} m`,
+        wert: (Math.max(0, raumumfang - aussen) / 2) * s.hoehe,
+        plan: rr.map((r) => ({ storeyId: s.id, points: r.points })),
+      });
+    }
+    iwf.hinweis =
+      'Ohne IFC-Modell nur eine grobe Näherung aus den Raumumrissen (jede Innenwand liegt an zwei Räumen): Räume, die ohne Wand aneinandergrenzen, werden falsch gezählt. Genauer wird die Menge aus den Wänden eines IFC-Modells – Projekt mit IFC-Modell öffnen – oder von Hand festgelegt.';
   }
-  iwf.hinweis = 'Grobe Näherung aus den Raumumrissen: Jede Innenwand liegt an zwei Räumen, die Außenwand nur an einem. Nur für Geschosse mit erfassten Räumen.';
 
   /* ---------- Grundstück und Außenanlagen ---------- */
   const fbgWert = project.meta.grundstueck.flaeche ?? 0;
@@ -463,25 +510,40 @@ function berechneNachweis(project: Project, result: ProjectResult): Nachweis {
   }
   we.hinweis = 'Wohnungen laut Zuordnung der Räume (WoFlV); Räume mit Wohnfläche ohne Zuordnung zählen zusammen als eine Einheit.';
 
-  for (const m of Object.values(mengen)) m.summe = m.teile.reduce((a, t) => a + t.wert, 0);
-  if (auf.summe < 0) {
-    auf.summe = 0;
-    auf.hinweis = 'Die überbaute Fläche ist größer als die Grundstücksfläche – bitte die Projektdaten prüfen.';
-  }
-
   return { mengen, koerper, geschosse: storeys.map(({ s, e }) => ({ id: s.id, name: s.name, hoehe: e })) };
 }
 
 let zuletzt: { schluessel: unknown[]; nachweis: Nachweis } | null = null;
+let ausgewaehlt: { roh: Nachweis; auswahl: unknown; nachweis: Nachweis } | null = null;
+
+/** zählt ein Teil zur Menge? Eigene Auswahl vor Standard */
+export const zaehltTeil = (t: Teil, auswahl: Record<string, boolean> | undefined) => auswahl?.[t.id] ?? !t.standardAus;
 
 /**
- * Mengennachweis des Projekts. Das Ergebnis hängt nur von Gebäude und Grundstück ab und wird wiederverwendet,
- * solange sich daran nichts ändert (Kennwerte und Positionen ändern die Mengen nicht).
+ * Mengennachweis des Projekts. Die Teile hängen nur von Gebäude, Grundstück und den Wänden des IFC-Modells ab
+ * und werden wiederverwendet, solange sich daran nichts ändert; die Summen zusätzlich von der Auswahl der Teile
+ * (Project.kosten.teile). Kennwerte und Positionen ändern die Mengen nicht.
+ *
+ * @param waende Wände aus dem IFC-Modell (bauteile.ts); null = keine, Innenwände dann aus den Räumen
  */
-export function mengenNachweis(project: Project, result?: ProjectResult): Nachweis {
-  const schluessel = [project.storeys, project.dachModell, project.settings, project.meta.grundstueck.flaeche];
-  if (zuletzt && zuletzt.schluessel.every((x, i) => x === schluessel[i])) return zuletzt.nachweis;
-  const nachweis = berechneNachweis(project, result ?? computeProject(project));
-  zuletzt = { schluessel, nachweis };
+export function mengenNachweis(project: Project, result?: ProjectResult, waende: IfcWand[] | null = null): Nachweis {
+  const schluessel = [project.storeys, project.dachModell, project.settings, project.meta.grundstueck.flaeche, waende];
+  if (!zuletzt || !zuletzt.schluessel.every((x, i) => x === schluessel[i])) {
+    zuletzt = { schluessel, nachweis: berechneNachweis(project, result ?? computeProject(project), waende) };
+  }
+  const roh = zuletzt.nachweis;
+  const auswahl = project.kosten?.teile;
+  if (ausgewaehlt && ausgewaehlt.roh === roh && ausgewaehlt.auswahl === auswahl) return ausgewaehlt.nachweis;
+  const mengen = {} as Record<MengenBezug, MengeNachweis>;
+  for (const [b, m] of Object.entries(roh.mengen) as [MengenBezug, MengeNachweis][]) {
+    const teile = m.teile.map((t) => ({ ...t, zaehlt: zaehltTeil(t, auswahl) }));
+    mengen[b] = { ...m, teile, summe: teile.reduce((a, t) => a + (t.zaehlt ? t.wert : 0), 0) };
+  }
+  if (mengen.auf.summe < 0) {
+    mengen.auf.summe = 0;
+    mengen.auf.hinweis = 'Die überbaute Fläche ist größer als die Grundstücksfläche – bitte die Projektdaten prüfen.';
+  }
+  const nachweis = { ...roh, mengen };
+  ausgewaehlt = { roh, auswahl, nachweis };
   return nachweis;
 }

@@ -172,6 +172,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_file,
             save_binary_file,
+            pick_save_path,
+            read_binary_file,
+            write_binary_file,
             pick_folder,
             fs_list,
             fs_read,

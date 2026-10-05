@@ -18,6 +18,8 @@ interface GrzState {
   project: Project;
   /** Dateiname beim letzten Öffnen/Speichern */
   datei: string | null;
+  /** Projekt beim letzten Öffnen/Speichern – Grundlage fürs Zusammenführen mit der Datei (siehe zusammenfuehren.ts) */
+  basis: Project | null;
   dirty: boolean;
   past: Project[];
   future: Project[];
@@ -25,11 +27,13 @@ interface GrzState {
   selected: string | null;
   werkzeug: Werkzeug;
 
-  load: (p: Project, datei?: string | null) => void;
+  /** basis: Stand der Datei, aus der das Projekt stammt (null bei IFC-Import bzw. neuem Projekt) */
+  load: (p: Project, datei?: string | null, basis?: Project | null) => void;
   update: (fn: (p: Project) => Project) => void;
   undo: () => void;
   redo: () => void;
-  markSaved: (datei?: string) => void;
+  /** nach dem Speichern: Dateiname und das gespeicherte (ggf. mit der Datei zusammengeführte) Projekt */
+  markSaved: (datei: string, gespeichert: Project) => void;
   select: (id: string | null) => void;
   setWerkzeug: (w: Werkzeug) => void;
 }
@@ -37,15 +41,16 @@ interface GrzState {
 export const useGrz = create<GrzState>()((set, get) => ({
   project: createProject('Neues Projekt'),
   datei: null,
+  basis: null,
   dirty: false,
   past: [],
   future: [],
   selected: null,
   werkzeug: 'auswahl',
 
-  load: (p, datei = null) => {
+  load: (p, datei = null, basis = null) => {
     log.info(`Projekt geladen: ${p.name}`, { geschosse: p.storeys.length, lageplan: p.lageplan?.flaechen.length ?? 0 });
-    set({ project: p, datei, dirty: false, past: [], future: [], selected: null, werkzeug: 'auswahl' });
+    set({ project: p, datei, basis, dirty: false, past: [], future: [], selected: null, werkzeug: 'auswahl' });
   },
   update: (fn) => {
     const { project, past } = get();
@@ -65,7 +70,11 @@ export const useGrz = create<GrzState>()((set, get) => ({
     if (!future.length) return;
     set({ project: future[0], past: [...past, project], future: future.slice(1), dirty: true });
   },
-  markSaved: (datei) => set({ dirty: false, ...(datei ? { datei } : {}) }),
+  markSaved: (datei, gespeichert) => {
+    // Änderungen anderer Apps aus der Datei übernommen: neuer Ausgangspunkt, alte Schritte passen nicht mehr
+    if (gespeichert !== get().project) set({ project: gespeichert, past: [], future: [] });
+    set({ dirty: false, datei, basis: gespeichert });
+  },
   select: (id) => set({ selected: id }),
   setWerkzeug: (w) => set({ werkzeug: w }),
 }));
@@ -119,8 +128,8 @@ if (typeof indexedDB !== 'undefined') {
     .then((raw) => {
       const st = useGrz.getState();
       if (!raw || st.dirty || st.past.length) return;
-      const r = raw as { project: unknown; datei: string | null };
-      st.load(parseProjectData(r.project), r.datei);
+      const r = raw as { project: unknown; datei: string | null; basis?: unknown };
+      st.load(parseProjectData(r.project), r.datei, r.basis ? parseProjectData(r.basis) : null);
     })
     .catch(() => {
       // kein Zwischenstand
@@ -128,11 +137,12 @@ if (typeof indexedDB !== 'undefined') {
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   useGrz.subscribe((s, prev) => {
-    if (s.project === prev.project) return;
+    if (s.project === prev.project && s.basis === prev.basis) return;
     clearTimeout(timer);
     timer = setTimeout(() => {
+      const { project, datei, basis } = useGrz.getState();
       void db()
-        .then((d) => d.transaction(STORE, 'readwrite').objectStore(STORE).put({ project: s.project, datei: s.datei }, KEY))
+        .then((d) => d.transaction(STORE, 'readwrite').objectStore(STORE).put({ project, datei, basis }, KEY))
         .catch(() => undefined);
     }, 600);
   });

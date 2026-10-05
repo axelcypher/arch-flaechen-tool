@@ -16,7 +16,10 @@ und Regionalfaktor.
 - **Speichern:** in dieselbe Projektdatei. Flächenrechner und GRZ-Nachweis zeigen die Kostenermittlung nicht
   an, bewahren sie aber beim Speichern (ab Flächenrechner 0.9.4 und GRZ-Nachweis 0.2.3); umgekehrt bewahrt
   die Kostenermittlung alles, was die anderen Apps pflegen. Ändern sich dort Flächen, ändern sich die Kosten
-  beim nächsten Öffnen mit.
+  beim nächsten Öffnen mit. Beim Speichern
+  liest jede App die Zieldatei neu und übernimmt, was eine andere App dort inzwischen gespeichert hat, statt es
+  mit ihrem eigenen, älteren Stand zu überschreiben (ab Flächenrechner 0.11.0, GRZ-Nachweis 0.4.0,
+  Kostenermittlung 0.4.0).
 
 ## Mengen
 
@@ -30,7 +33,7 @@ geleertes Feld schaltet zurück.
 | GRF | Gründungsfläche | BGF des untersten Geschosses |
 | BGI | Baugrubeninhalt | grob: Gründungsfläche × Tiefe des untersten Fußbodens unter ±0,00 |
 | AWF | Außenwandfläche | grob: senkrechte Außenflächen der BGF-Körper (R), einschließlich Öffnungen und erdberührter Wände – bis zur Geschosshöhe, im obersten Geschoss bis zur Dachhaut; Wände zwischen aneinanderliegenden Umrissen zählen nicht (nur der Teil über dem niedrigeren Körper) |
-| IWF | Innenwandfläche | grob: (Σ Raumumfänge − Außenumfang) / 2 × Geschosshöhe – nur, wenn Räume erfasst sind |
+| IWF | Innenwandfläche | Wände aus dem IFC-Modell: je Innenwand die Ansichtsfläche einer Seite vom Wandfuß bis zur Oberkante (Länge × Höhe, Öffnungen übermessen, Schrägen in wahrer Größe). Ohne IFC-Modell nur grob aus den Raumumfängen – siehe unten |
 | DEF | Deckenfläche | BGF der Geschosse über dem untersten |
 | DAF | Dachfläche | Oberseiten der BGF-Körper (R), geneigte Flächen in wahrer Größe; ebene Flächen nur, soweit kein Geschoss darüber liegt (Staffelgeschoss, Anbau). Versätze bis 25 cm zwischen den Geschossen zählen nicht; ohne Dachüberstände |
 | AUF | Außenanlagenfläche | Grundstücksfläche − überbaute Fläche |
@@ -40,6 +43,32 @@ geleertes Feld schaltet zurück.
 Die Bauteilmengen sind Näherungen für frühe Leistungsphasen (keine Abzüge für Öffnungen, keine
 Bauteilschichten). Für die Kostenberechnung auf Elementebene eigene Mengen eintragen. Abzugsflächen
 (Innenhof, Luftraum) erzeugen weder Wände noch Dachflächen.
+
+### Innenwände aus dem IFC-Modell
+
+Räume können ohne Wand aneinandergrenzen (offene Küche, Flur ohne Tür), deshalb taugen die Raumumrisse nicht
+für die Innenwandfläche. Enthält das Projekt ein IFC-Modell (direkt geöffnet oder im Flächenrechner importiert
+und mitgespeichert), liest die Kostenermittlung beim Öffnen dessen Wände (`IfcWall`, `IfcWallStandardCase`) und
+vermisst jede einzeln: Länge entlang der Achse, Dicke, Ansichtsfläche vom Wandfuß bis zur Oberkante. Türen und
+Fenster werden übermessen, raumhohe Durchgänge überbrückt, Giebel und Dachschrägen in wahrer Größe gerechnet.
+
+Welche Wand innen liegt, entscheidet:
+
+- `IsExternal` aus `Pset_WallCommon` – aber nur, wenn das Modell beide Werte enthält. Viele Modelle markieren
+  alle Wände als außen (Archicad-Voreinstellung), dann ist die Angabe wertlos;
+- sonst die Lage: Eine Außenwand liegt auf ganzer Länge am umschlossenen BGF-Umriss ihres Geschosses.
+
+Außenwände, Wände außerhalb der BGF und Wände unter 0,50 m Höhe (Aufkantungen, Sockel) stehen in der Liste,
+zählen aber zunächst nicht. Ohne IFC-Modell bleibt die grobe Näherung (Σ Raumumfänge − Außenumfang) / 2 ×
+Geschosshöhe mit einem Hinweis auf ihre Schwäche.
+
+### Teile an- und abwählen
+
+Jede Menge ist eine Summe von Teilen, und jedes Teil lässt sich in **Mengen prüfen** einzeln an- oder abwählen:
+mit dem Häkchen im Rechenweg oder per Klick auf das Teil im Grundriss bzw. im 3D-Modell. Abgewählte Teile
+erscheinen grau und durchgestrichen und zählen weder zur Menge noch zu den Kosten. Über dem Rechenweg setzen
+„alle“, „keine“ und „Standard“ die Auswahl der gewählten Menge auf einmal. Die Auswahl wird im Projekt
+gespeichert (nur Abweichungen vom Standard) und gilt auch für Druck, Excel und Kostenstände.
 
 ### Mengen prüfen
 
@@ -54,7 +83,8 @@ Menge in der Kostenansicht):
   beitragen, sind mit „zählt nicht“ gekennzeichnet,
 - **rechts** der Rechenweg: je Teil Geschoss, Bezeichnung, Rechenansatz und Wert; die Summe ist die Menge.
 
-Ein Teil unter dem Mauszeiger wird in Bild und Tabelle gemeinsam hervorgehoben. Grundflächen, Räume,
+Ein Teil unter dem Mauszeiger wird in Bild und Tabelle gemeinsam hervorgehoben, ein Klick darauf wählt es an
+oder ab (siehe oben). Grundflächen, Räume,
 Gründung, Decken und Außenanlagen öffnen in den Grundrissen, Rauminhalt, Außenwand und Dach im 3D-Modell
 (drehen, zoomen, Geschosse auseinanderziehen); beide Darstellungen lassen sich für jede Menge umschalten.
 Ist eine Menge von Hand festgelegt, weist die Ansicht darauf hin – das Bild zeigt immer die abgeleitete Menge.

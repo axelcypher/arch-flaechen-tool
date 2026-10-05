@@ -10,13 +10,15 @@ import { berechne, euro, euroSpanne, standAus, stufeLabel, vergleiche } from '..
 import type { MengenBezug } from '../mengen';
 import { MENGEN_BEZUEGE, MENGEN_INFO } from '../mengen';
 import { addPositionen, mapPosition, removePosition, setKosten, useKosten } from '../store';
+import { useBauteile } from '../bauteile';
 
 const zahl = (v: number, d = 2) => v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /** Massen- und Kostenermittlung: Grundlagen und Mengen, Positionen nach DIN 276, Übersicht mit Kostenständen */
 export function KostenView({ onKatalog, onMenge }: { onKatalog: () => void; onMenge?: (b: MengenBezug) => void }) {
   const project = useKosten((s) => s.project);
-  const e = useMemo(() => berechne(project), [project]);
+  const waende = useBauteile((s) => s.waende);
+  const e = useMemo(() => berechne(project, undefined, waende), [project, waende]);
   const k: Kosten = project.kosten ?? { positionen: [] };
   const st = useKosten.getState();
   const setK = (patch: Partial<Kosten>) => st.update((p) => setKosten(p, patch));

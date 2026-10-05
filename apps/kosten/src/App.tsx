@@ -8,6 +8,7 @@ import { KatalogDialog } from './components/KatalogDialog';
 import { KostenDruck } from './components/KostenDruck';
 import { KostenView } from './components/KostenView';
 import { MengenView } from './components/MengenView';
+import { bauteileLaden } from './bauteile';
 import { oeffnen, speichern } from './datei';
 import type { MengenBezug } from './mengen';
 import { useKosten } from './store';
@@ -21,6 +22,7 @@ export function App() {
   const hatPositionen = useKosten((s) => (s.project.kosten?.positionen.length ?? 0) > 0);
   const canUndo = useKosten((s) => s.past.length > 0);
   const canRedo = useKosten((s) => s.future.length > 0);
+  const dateien = useKosten((s) => s.project.dateien);
   const [logOpen, setLogOpen] = useState(false);
   const [excelOpen, setExcelOpen] = useState(false);
   const [druckOpen, setDruckOpen] = useState(false);
@@ -29,6 +31,11 @@ export function App() {
   const [menge, setMenge] = useState<MengenBezug>('bgf');
   const [busy, setBusy] = useState<string | null>(null);
   const [bericht, setBericht] = useState<string[]>([]);
+
+  // Wände des mitgespeicherten IFC-Modells für die Innenwandfläche
+  useEffect(() => {
+    void bauteileLaden(useKosten.getState().project);
+  }, [dateien]);
 
   useEffect(() => {
     document.title = `${dirty ? '• ' : ''}${name} – Kostenermittlung`;
@@ -39,7 +46,7 @@ export function App() {
     try {
       const r = await oeffnen(setBusy);
       if (r) {
-        useKosten.getState().load(r.project, r.datei);
+        useKosten.getState().load(r.project, r.datei, r.basis);
         setBericht(r.bericht);
       }
     } catch (e) {
@@ -51,10 +58,14 @@ export function App() {
   };
 
   const onSave = async () => {
-    const { project, datei } = useKosten.getState();
+    const { project, datei, basis } = useKosten.getState();
     try {
-      const saved = await speichern(project, datei);
-      if (saved) useKosten.getState().markSaved(saved);
+      const r = await speichern(project, datei, basis);
+      if (r) {
+        // während des Dialogs weitergearbeitet? Dann bleibt der neue Stand ungespeichert.
+        if (useKosten.getState().project === project) useKosten.getState().markSaved(r.datei, r.project);
+        if (r.zusammengefuehrt) alert('In der Datei standen Änderungen aus einer anderen App. Sie wurden übernommen, nicht überschrieben.');
+      }
     } catch (e) {
       log.error('Speichern fehlgeschlagen', e instanceof Error ? e.message : String(e));
       alert(`Speichern fehlgeschlagen: ${String(e)}`);

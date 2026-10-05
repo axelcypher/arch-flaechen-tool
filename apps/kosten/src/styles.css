@@ -290,6 +290,19 @@ button.link:hover {
 .mv-rechenweg tr.mv-abzug td {
   color: var(--danger);
 }
+.mv-rechenweg tr.mv-aus td:not(:first-child) {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.mv-auswahl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.mv-auswahl span {
+  margin-right: auto;
+}
 .mv-legende {
   display: flex;
   flex-wrap: wrap;
@@ -313,6 +326,10 @@ button.link:hover {
 .mv-legende i.abzug {
   background: repeating-linear-gradient(-45deg, #c0392b 0 1.5px, transparent 1.5px 4px);
   border-color: #c0392b;
+}
+.mv-legende i.aus {
+  background: rgba(154, 160, 166, 0.25);
+  border-style: dashed;
 }
 .mv-legende i.aktiv {
   background: rgba(255, 122, 0, 0.6);
@@ -374,6 +391,15 @@ button.link:hover {
   fill: rgba(42, 91, 215, 0.04);
   stroke: #2a5bd7;
   stroke-width: 3;
+}
+.mp-teil.klickbar {
+  cursor: pointer;
+}
+.mp-teil.aus path {
+  fill: rgba(154, 160, 166, 0.18);
+  stroke: #9aa0a6;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
 }
 .mp-teil.aktiv path {
   fill: rgba(255, 122, 0, 0.5);

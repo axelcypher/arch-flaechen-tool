@@ -32,7 +32,7 @@ export function App() {
     try {
       const r = await oeffnen(setBusy);
       if (r) {
-        useGrz.getState().load(r.project, r.datei);
+        useGrz.getState().load(r.project, r.datei, r.basis);
         setBericht(r.bericht);
       }
     } catch (e) {
@@ -44,10 +44,14 @@ export function App() {
   };
 
   const onSave = async () => {
-    const { project, datei } = useGrz.getState();
+    const { project, datei, basis } = useGrz.getState();
     try {
-      const saved = await speichern(project, datei);
-      if (saved) useGrz.getState().markSaved(saved);
+      const r = await speichern(project, datei, basis);
+      if (r) {
+        // während des Dialogs weitergearbeitet? Dann bleibt der neue Stand ungespeichert.
+        if (useGrz.getState().project === project) useGrz.getState().markSaved(r.datei, r.project);
+        if (r.zusammengefuehrt) alert('In der Datei standen Änderungen aus einer anderen App. Sie wurden übernommen, nicht überschrieben.');
+      }
     } catch (e) {
       log.error('Speichern fehlgeschlagen', e instanceof Error ? e.message : String(e));
       alert(`Speichern fehlgeschlagen: ${String(e)}`);

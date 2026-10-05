@@ -2,6 +2,10 @@
 
 export interface IfcMeshPart {
   expressId: number;
+  /** IFC-GlobalId (bleibt bei erneutem Export gleich) */
+  globalId?: string;
+  /** Außenbauteil laut Eigenschaften (IsExternal); ohne Angabe unbekannt */
+  isExternal?: boolean;
   type: string;
   name: string;
   predefinedType: string;

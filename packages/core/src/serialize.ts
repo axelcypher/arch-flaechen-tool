@@ -180,6 +180,11 @@ function normalizeKosten(k: Record<string, unknown>): Kosten {
     for (const b of KOSTEN_BEZUEGE) if (zahl(k.mengen[b]) !== undefined) m[b] = zahl(k.mengen[b]);
     out.mengen = m;
   }
+  if (isObj(k.teile)) {
+    const t: Record<string, boolean> = {};
+    for (const [id, v] of Object.entries(k.teile)) if (typeof v === 'boolean') t[id] = v;
+    if (Object.keys(t).length) out.teile = t;
+  }
   for (const f of ['indexBasis', 'indexAktuell', 'regionalfaktor', 'mwst'] as const) if (zahl(k[f]) !== undefined) out[f] = zahl(k[f]);
   if (k.kennwerteBrutto === true) out.kennwerteBrutto = true;
   if (isObj(k.katalog) && typeof k.katalog.name === 'string') {

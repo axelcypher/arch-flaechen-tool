@@ -60,6 +60,33 @@ export async function saveBinaryFile(o: SaveBinaryOptions): Promise<boolean> {
   return true;
 }
 
+export interface SaveMergedOptions extends Omit<SaveBinaryOptions, 'data'> {
+  /** erzeugt den Dateiinhalt; bekommt den bisherigen Inhalt der Zieldatei (null bei neuer Datei bzw. im Browser) */
+  build: (vorhanden: Uint8Array | null) => Uint8Array;
+}
+
+/**
+ * Speichern mit Blick auf die vorhandene Datei: erst Ziel wählen, dann deren Inhalt lesen, daraus die neuen
+ * Daten erzeugen und schreiben. Liefert den Dateinamen (ohne Ordner) oder null bei Abbruch.
+ */
+export async function saveMergedFile(o: SaveMergedOptions): Promise<string | null> {
+  if (isTauri()) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const path = await invoke<string | null>('pick_save_path', {
+      defaultName: o.defaultName,
+      filterName: o.filterName,
+      extensions: [o.extension, ...(o.moreExtensions ?? [])],
+    });
+    if (path == null) return null;
+    const vorhanden = await invoke<string | null>('read_binary_file', { path });
+    const data = o.build(vorhanden == null ? null : base64ToBytes(vorhanden));
+    await invoke('write_binary_file', { path, contentsBase64: bytesToBase64(data) });
+    return path.split(/[\\/]/).pop() || o.defaultName;
+  }
+  downloadBlob(new Blob([o.build(null) as BlobPart], { type: o.mime }), o.defaultName);
+  return o.defaultName;
+}
+
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

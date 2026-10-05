@@ -2,8 +2,10 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { fmt2 } from '@core/format';
 import type { MengenBezug } from '../mengen';
 import { MENGEN_BEZUEGE, MENGEN_INFO, mengen } from '../mengen';
+import { useBauteile } from '../bauteile';
+import type { Teil } from '../nachweis';
 import { mengenNachweis } from '../nachweis';
-import { useKosten } from '../store';
+import { setKosten, useKosten } from '../store';
 import { MengenPlan } from './MengenPlan';
 
 const Mengen3D = lazy(() => import('./Mengen3D'));
@@ -13,12 +15,15 @@ const wert = (b: MengenBezug, v: number) => (b === 'we' ? String(v) : fmt2(v));
 /**
  * Mengen prüfen: links alle Mengen, in der Mitte die Darstellung der gewählten Menge (Grundrisse je Geschoss
  * oder 3D-Modell), rechts der Rechenweg – die Teile, deren Summe die Menge ergibt. Bild und Tabelle zeigen
- * dieselben Teile; ein Teil unter dem Mauszeiger wird in beiden hervorgehoben.
+ * dieselben Teile; ein Teil unter dem Mauszeiger wird in beiden hervorgehoben. Jedes Teil lässt sich an- und
+ * abwählen (Häkchen in der Tabelle oder Klick im Bild) – abgewählte Teile zählen nicht zur Menge.
  */
 export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b: MengenBezug) => void }) {
   const project = useKosten((s) => s.project);
-  const nachweis = useMemo(() => mengenNachweis(project), [project]);
-  const m = useMemo(() => mengen(project), [project]);
+  const waende = useBauteile((s) => s.waende);
+  const ifcStatus = useBauteile((s) => s.status);
+  const nachweis = useMemo(() => mengenNachweis(project, undefined, waende), [project, waende]);
+  const m = useMemo(() => mengen(project, undefined, waende), [project, waende]);
   const menge = nachweis.mengen[bezug];
   const info = MENGEN_INFO[bezug];
   const [ansicht, setAnsicht] = useState<'plan' | 'raum'>(menge.ansicht);
@@ -32,6 +37,23 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
 
   const hatGeometrie = menge.teile.some((t) => t.plan?.length || t.raum?.length);
   const festgelegt = m[bezug].festgelegt;
+  const gezaehlt = menge.teile.filter((t) => t.zaehlt).length;
+  const abweichend = menge.teile.some((t) => project.kosten?.teile?.[t.id] !== undefined);
+
+  /** Auswahl setzen; was dem Standard entspricht, wird nicht gespeichert */
+  const waehle = (teile: Teil[], an: (t: Teil) => boolean) =>
+    useKosten.getState().update((p) => {
+      const auswahl = { ...(p.kosten?.teile ?? {}) };
+      for (const t of teile) {
+        if (an(t) === !t.standardAus) delete auswahl[t.id];
+        else auswahl[t.id] = an(t);
+      }
+      return setKosten(p, { teile: Object.keys(auswahl).length ? auswahl : undefined });
+    });
+  const umschalten = (id: string) => {
+    const t = menge.teile.find((x) => x.id === id);
+    if (t) waehle([t], () => !t.zaehlt);
+  };
 
   return (
     <div className="mv-view">
@@ -70,6 +92,8 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
           </div>
         </div>
         {menge.hinweis && <p className="muted small-text">{menge.hinweis}</p>}
+        {bezug === 'iwf' && ifcStatus === 'laedt' && <p className="muted small-text">Die Wände des IFC-Modells werden gelesen …</p>}
+        {bezug === 'iwf' && ifcStatus === 'fehler' && <p className="warning">Das IFC-Modell des Projekts konnte nicht gelesen werden – die Innenwandfläche ist nur grob aus den Räumen abgeleitet.</p>}
         {festgelegt && (
           <p className="warning">
             Für die Kosten gilt der von Hand festgelegte Wert {wert(bezug, m[bezug].wert)} {info.einheit}. Die Darstellung zeigt die abgeleitete Menge {wert(bezug, menge.summe)}{' '}
@@ -79,10 +103,10 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
         {!hatGeometrie && !menge.lageplan ? (
           <p className="muted small-text">Für diese Menge gibt es im Projekt nichts darzustellen.</p>
         ) : ansicht === 'plan' ? (
-          <MengenPlan project={project} menge={menge} einheit={info.einheit} aktiv={aktiv} onAktiv={setAktiv} />
+          <MengenPlan project={project} menge={menge} einheit={info.einheit} aktiv={aktiv} onAktiv={setAktiv} onUmschalten={umschalten} />
         ) : (
           <Suspense fallback={<p className="muted small-text">3D-Modell wird geladen …</p>}>
-            <Mengen3D project={project} nachweis={nachweis} menge={menge} aktiv={aktiv} onAktiv={setAktiv} />
+            <Mengen3D project={project} nachweis={nachweis} menge={menge} aktiv={aktiv} onAktiv={setAktiv} onUmschalten={umschalten} />
           </Suspense>
         )}
         <p className="mv-legende small-text">
@@ -91,6 +115,9 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
           </span>
           <span>
             <i className="abzug" /> Abzug
+          </span>
+          <span>
+            <i className="aus" /> abgewählt, zählt nicht
           </span>
           <span>
             <i className="aktiv" /> unter dem Mauszeiger
@@ -103,11 +130,28 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
 
       <section className="ko-col mv-rechenweg">
         <h2>Rechenweg</h2>
+        {menge.teile.length > 1 && (
+          <div className="mv-auswahl small-text">
+            <span className="muted">
+              {gezaehlt} von {menge.teile.length} Teilen zählen
+            </span>
+            <button className="small" onClick={() => waehle(menge.teile, () => true)} disabled={gezaehlt === menge.teile.length}>
+              alle
+            </button>
+            <button className="small" onClick={() => waehle(menge.teile, () => false)} disabled={gezaehlt === 0}>
+              keine
+            </button>
+            <button className="small" onClick={() => waehle(menge.teile, (t) => !t.standardAus)} disabled={!abweichend} title="Auswahl dieser Menge auf den Standard zurücksetzen">
+              Standard
+            </button>
+          </div>
+        )}
         {menge.teile.length ? (
           <div className="tbl-wrap">
             <table className="ko-table" onMouseLeave={() => setAktiv(null)}>
               <thead>
                 <tr>
+                  <th title="zählt zur Menge" />
                   <th>Geschoss</th>
                   <th>Teil</th>
                   <th className="num">{info.einheit}</th>
@@ -115,7 +159,10 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
               </thead>
               <tbody>
                 {menge.teile.map((t) => (
-                  <tr key={t.id} className={`${t.id === aktiv ? 'selected' : ''}${t.wert < 0 ? ' mv-abzug' : ''}`} onMouseEnter={() => setAktiv(t.id)}>
+                  <tr key={t.id} className={`${t.id === aktiv ? 'selected' : ''}${t.wert < 0 ? ' mv-abzug' : ''}${t.zaehlt ? '' : ' mv-aus'}`} onMouseEnter={() => setAktiv(t.id)}>
+                    <td>
+                      <input type="checkbox" checked={!!t.zaehlt} onChange={() => umschalten(t.id)} title={t.zaehlt ? 'zählt zur Menge – abwählen' : 'zählt nicht – anwählen'} />
+                    </td>
                     <td>{t.geschoss}</td>
                     <td>
                       {t.bezeichnung}
@@ -125,7 +172,7 @@ export function MengenView({ bezug, onBezug }: { bezug: MengenBezug; onBezug: (b
                   </tr>
                 ))}
                 <tr className="sum">
-                  <td colSpan={2}>Summe = {info.kurz}</td>
+                  <td colSpan={3}>Summe = {info.kurz}</td>
                   <td className="num">{wert(bezug, menge.summe)}</td>
                 </tr>
               </tbody>

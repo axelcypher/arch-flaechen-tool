@@ -4,6 +4,7 @@ import type { Kosten, KostenPosition, KostenStand, KostenStufe, Project, Spanne 
 import { KOSTEN_STUFEN, newId } from '@core/model';
 import { istKg, kg1, kg2, kgInBasis, kgName, kgUnter } from './din276';
 import type { Mengen, MengenBezug } from './mengen';
+import type { IfcWand } from './waende';
 import { MENGEN_INFO, mengen, mengenWerte } from './mengen';
 
 /**
@@ -81,9 +82,9 @@ export function bezugLabel(p: Pick<KostenPosition, 'bezug' | 'einheit' | 'basis'
   return `${MENGEN_INFO[p.bezug].einheit} ${MENGEN_INFO[p.bezug].kurz}`;
 }
 
-export function berechne(project: Project, result: ProjectResult = computeProject(project)): Ergebnis {
+export function berechne(project: Project, result: ProjectResult = computeProject(project), waende?: IfcWand[] | null): Ergebnis {
   const k = project.kosten;
-  const m = mengen(project, result);
+  const m = waende === undefined ? mengen(project, result) : mengen(project, result, waende);
   const faktor = faktorVon(k);
   const mwst = k?.mwst ?? MWST_STANDARD;
   const netto = k?.kennwerteBrutto ? 1 / (1 + mwst / 100) : 1;
